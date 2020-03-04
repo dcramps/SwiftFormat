@@ -19,6 +19,7 @@
 * [leadingDelimiters](#leadingDelimiters)
 * [linebreakAtEndOfFile](#linebreakAtEndOfFile)
 * [linebreaks](#linebreaks)
+* [multiLineBraces](#multiLineBraces)
 * [numberFormatting](#numberFormatting)
 * [ranges *(deprecated)*](#ranges)
 * [redundantBackticks](#redundantBackticks)
@@ -574,6 +575,10 @@ Use specified linebreak character for all linebreaks (CR, LF or CRLF).
 Option | Description
 --- | ---
 `--linebreaks` | Linebreak character to use: "cr", "crlf" or "lf" (default)
+
+## multiLineBraces
+
+Place `{` on a new line if the guard statement has multiple lines.
 
 ## numberFormatting
 

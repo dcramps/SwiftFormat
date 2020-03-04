@@ -893,7 +893,7 @@ public struct _FormatRules {
     /// indenting can be configured with the `options` parameter of the formatter.
     public let indent = FormatRule(
         help: "Indent code in accordance with the scope level.",
-        orderAfter: ["trailingSpace", "wrap", "wrapArguments"],
+        orderAfter: ["trailingSpace", "wrap", "wrapArguments", "multiLineBraces"],
         options: ["indent", "tabwidth", "indentcase", "ifdef", "xcodeindentation"],
         sharedOptions: ["trimwhitespace"]
     ) { formatter in
@@ -1376,6 +1376,7 @@ public struct _FormatRules {
             guard !formatter.isStartOfClosure(at: i) else {
                 return
             }
+
             if formatter.options.allmanBraces {
                 // Implement Allman-style braces, where opening brace appears on the next line
                 switch formatter.last(.nonSpace, before: i) ?? .space("") {
@@ -1401,6 +1402,50 @@ public struct _FormatRules {
                     return
                 }
                 formatter.replaceTokens(inRange: prevIndex + 1 ..< i, with: [.space(" ")])
+            }
+        }
+    }
+
+    public let multiLineBraces = FormatRule(
+        help: "Place `{` on a new line if the guard statement has multiple lines.",
+        orderAfter: ["braces"],
+        options: [],
+        sharedOptions: []
+    ) { formatter in
+        let keywords: [Token] = [
+            .keyword("init"),
+            .keyword("func"),
+            .keyword("if"),
+            .keyword("guard"),
+        ]
+        keywords.forEach {
+            formatter.forEach($0) { i, _ in
+                guard let nextStartOfScope = formatter.nextToken(after: i, where: {
+                    $0 == .startOfScope("{") && !formatter.isStartOfClosure(at: formatter.tokens.index(of: $0)!)
+                }) else {
+                    return
+                }
+
+                guard let nextStartOfScopeIndex = formatter.index(of: nextStartOfScope, after: i),
+                    let upperBound = formatter.last(.nonSpace, before: nextStartOfScopeIndex),
+                    let upperBoundIndex = formatter.tokens.index(of: upperBound),
+                    i < upperBoundIndex else {
+                    return
+                }
+
+                let keywordRange = i ... upperBoundIndex
+                let keywordSlice = formatter.tokens[keywordRange]
+
+                let linebreaksInStatement = formatter.tokens[keywordRange].filter { $0.isLinebreak }
+                if !linebreaksInStatement.isEmpty {
+                    if formatter.tokens[upperBoundIndex].is(.linebreak) {
+                        return
+                    }
+                    if let nextSpace = formatter.index(of: .space, after: upperBoundIndex) {
+                        formatter.removeToken(at: nextSpace)
+                    }
+                    formatter.insertLinebreak(at: upperBoundIndex + 1)
+                }
             }
         }
     }

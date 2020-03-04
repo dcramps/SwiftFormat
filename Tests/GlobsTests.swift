@@ -6,8 +6,8 @@
 //  Copyright © 2018 Nick Lockwood. All rights reserved.
 //
 
-import XCTest
 @testable import SwiftFormat
+import XCTest
 
 class GlobsTests: XCTestCase {
     // MARK: glob matching
