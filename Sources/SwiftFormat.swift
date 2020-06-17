@@ -32,7 +32,8 @@
 import Foundation
 
 /// The current SwiftFormat version
-public let version = "0.44.4"
+let swiftFormatVersion = "0.44.13"
+public let version = swiftFormatVersion
 
 /// The standard SwiftFormat config file name
 public let swiftFormatConfigurationFile = ".swiftformat"
@@ -73,7 +74,10 @@ public typealias FileEnumerationHandler = (
     _ options: Options
 ) throws -> () throws -> Void
 
-/// Enumerate all swift files at the specified location and (optionally) calculate an output file URL for each.
+/// Callback for info-level logging
+public typealias Logger = (String) -> Void
+
+/// Enumerate all Swift files at the specified location and (optionally) calculate an output file URL for each.
 /// Ignores the file if any of the excluded file URLs is a prefix of the input file URL.
 ///
 /// Files are enumerated concurrently. For convenience, the enumeration block returns a completion block, which
@@ -86,6 +90,7 @@ public func enumerateFiles(withInputURL inputURL: URL,
                            outputURL: URL? = nil,
                            options baseOptions: Options = .default,
                            concurrent: Bool = true,
+                           logger print: Logger? = nil,
                            skipped: FileEnumerationHandler? = nil,
                            handler: @escaping FileEnumerationHandler) -> [Error] {
     let manager = FileManager.default
@@ -234,6 +239,7 @@ public func enumerateFiles(withInputURL inputURL: URL,
             let data = try Data(contentsOf: configFile)
             let args = try parseConfigFile(data)
             try options.addArguments(args, in: inputURL.path)
+            print?("Reading config file at \(configFile.path)")
         }
         let versionFile = inputURL.appendingPathComponent(swiftVersionFile)
         if manager.fileExists(atPath: versionFile.path) {
@@ -418,30 +424,30 @@ public func newOffset(for offset: SourceOffset, in tokens: [Token], tabWidth: In
 
 /// Process parsing errors
 public func parsingError(for tokens: [Token], options: FormatOptions) -> FormatError? {
-    if let index = tokens.index(where: {
+    guard let index = tokens.index(where: {
         guard options.fragment || !$0.isError else { return true }
         guard !options.ignoreConflictMarkers, case let .operator(string, _) = $0 else { return false }
         return string.hasPrefix("<<<<<") || string.hasPrefix("=====") || string.hasPrefix(">>>>>")
-    }) {
-        let message: String
-        switch tokens[index] {
-        case .error(""):
-            message = "Unexpected end of file"
-        case let .error(string):
-            if string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                message = "Inconsistent whitespace in multi-line string literal"
-            } else {
-                message = "Unexpected token \(string)"
-            }
-        case let .operator(string, _):
-            message = "Found conflict marker \(string)"
-        default:
-            preconditionFailure()
-        }
-        let offset = offsetForToken(at: index, in: tokens, tabWidth: options.tabWidth)
-        return .parsing("\(message) at \(offset)")
+    }) else {
+        return nil
     }
-    return nil
+    let message: String
+    switch tokens[index] {
+    case .error(""):
+        message = "Unexpected end of file"
+    case let .error(string):
+        if string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            message = "Inconsistent whitespace in multi-line string literal"
+        } else {
+            message = "Unexpected token \(string)"
+        }
+    case let .operator(string, _):
+        message = "Found conflict marker \(string)"
+    default:
+        preconditionFailure()
+    }
+    let offset = offsetForToken(at: index, in: tokens, tabWidth: options.tabWidth)
+    return .parsing("\(message) at \(offset)")
 }
 
 /// Convert a token array back into a string
@@ -491,6 +497,11 @@ private func applyRules(
 ) throws -> (tokens: [Token], changes: [Formatter.Change]) {
     precondition(maxIterations > 1)
     var tokens = originalTokens
+
+    // Ensure rule names have been set
+    if rules.first?.name == "" {
+        _ = FormatRules.all
+    }
 
     // Check for parsing errors
     if let error = parsingError(for: tokens, options: options) {

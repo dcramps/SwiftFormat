@@ -206,12 +206,29 @@ class CommandLineTests: XCTestCase {
         XCTAssertEqual(CLI.run(in: projectDirectory.path, with: "Sources --dryrun Tests --rules indent"), .error)
     }
 
+    // MARK: file list
+
+    func testParseFileList() {
+        let source = """
+        #foo
+        foo.swift #bar
+
+        #baz
+        bar/baz.swift
+        """
+        XCTAssertEqual(parseFileList(source, in: projectDirectory.path), [
+            URL(fileURLWithPath: "\(projectDirectory.path)/foo.swift"),
+            URL(fileURLWithPath: "\(projectDirectory.path)/bar/baz.swift"),
+        ])
+    }
+
     // MARK: snapshot/regression tests
 
     func testRegressionSuite() {
         CLI.print = { message, _ in
             Swift.print(message)
         }
-        XCTAssertEqual(CLI.run(in: projectDirectory.path, with: "Snapshots --unexclude Snapshots --symlinks follow --lint --cache ignore"), .ok)
+        // NOTE: to update regression suite, run again without `--lint` argument
+        XCTAssertEqual(CLI.run(in: projectDirectory.path, with: "Snapshots --unexclude Snapshots --symlinks follow --cache ignore --lint"), .ok)
     }
 }

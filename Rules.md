@@ -1259,6 +1259,10 @@ Remove space inside parentheses.
 
 Use consistent ordering for member specifiers.
 
+Option | Description
+--- | ---
+`--specifierorder` | Comma-delimited list of specifiers in preferred order
+
 <details>
 <summary>Examples</summary>
 
@@ -1268,8 +1272,8 @@ Use consistent ordering for member specifiers.
 ```
 
 ```diff
-- override public final func foo()
-+ public final override func foo()
+- final public override func foo()
++ override public final func foo()
 ```
 
 ```diff
@@ -1311,7 +1315,7 @@ Remove backticks around `self` in Optional unwrap expressions.
 ```
 
 **NOTE:** assignment to un-escaped `self` is only supported in Swift 4.2 and
-above, so the `strongifiedSelf` rule is disabled unless the swift version is
+above, so the `strongifiedSelf` rule is disabled unless the Swift version is
 set to 4.2 or above.
 
 </details>
@@ -1400,6 +1404,10 @@ Option | Description
 ## typeSugar
 
 Prefer shorthand syntax for Arrays, Dictionaries and Optionals.
+
+Option | Description
+--- | ---
+`--shortoptionals` | Use ? for Optionals "always" (default) or "except-properties"
 
 <details>
 <summary>Examples</summary>
@@ -1507,6 +1515,7 @@ Wrap lines that exceed the specified maximum width.
 Option | Description
 --- | ---
 `--maxwidth` | Maximum length of a line before wrapping. defaults to "none"
+`--nowrapoperators` | Comma-delimited list of operators that shouldn't be wrapped
 
 ## wrapArguments
 
@@ -1524,6 +1533,7 @@ Option | Description
 
 **NOTE:** For backwards compatibility with previous versions, if no value is
 provided for `--wrapparameters`, the value for `--wraparguments` will be used.
+
 `--wraparguments before-first`
 
 ```diff
@@ -1549,15 +1559,15 @@ provided for `--wrapparameters`, the value for `--wraparguments` will be used.
 `--wrapparameters after-first`
 
 ```diff
-- func foo(bar: Int,
--          baz: String) {
+- func foo(
+-   bar: Int,
+-   baz: String
+- ) {
     ...
   }
 
-+ func foo(
-+   bar: Int,
-+   baz: String
-+ ) {
++ func foo(bar: Int,
++          baz: String) {
     ...
   }
 ```

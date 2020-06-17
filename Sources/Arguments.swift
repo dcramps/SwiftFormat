@@ -152,11 +152,24 @@ func parseCommaDelimitedList(_ string: String) -> [String] {
 // Parse a comma-delimited string into an array of rules
 let allRules = Set(FormatRules.byName.keys)
 func parseRules(_ rules: String) throws -> [String] {
-    let rules = parseCommaDelimitedList(rules)
-    try rules.first(where: { !allRules.contains($0) }).map {
-        throw FormatError.options("Unknown rule '\($0)'")
+    return try parseCommaDelimitedList(rules).map { proposedName in
+        if let name = allRules.first(where: {
+            $0.lowercased() == proposedName.lowercased()
+        }) {
+            return name
+        }
+        if FormatOptions.Descriptor.all.contains(where: {
+            $0.argumentName == proposedName
+        }) {
+            for rule in FormatRules.all where rule.options.contains(proposedName) {
+                throw FormatError.options(
+                    "'\(proposedName)' is not a formatting rule. Did you mean '\(rule.name)'?"
+                )
+            }
+            throw FormatError.options("'\(proposedName)' is not a formatting rule")
+        }
+        throw FormatError.options("Unknown rule '\(proposedName)'")
     }
-    return rules
 }
 
 // Parse single file path
@@ -327,6 +340,12 @@ func argumentsFor(_ options: Options, excludingDefaults: Bool = false) -> [Strin
             }
             arguments.remove("unexclude")
         }
+        do {
+            if !excludingDefaults || fileOptions.minVersion != FileOptions.default.minVersion {
+                args["minversion"] = fileOptions.minVersion.description
+            }
+            arguments.remove("minversion")
+        }
         assert(arguments.isEmpty)
     }
     if let formatOptions = options.formatOptions {
@@ -365,7 +384,7 @@ private func processOption(_ key: String,
                            in args: [String: String],
                            from: inout Set<String>,
                            handler: (String) throws -> Void) throws {
-    precondition(optionsArguments.contains(key))
+    precondition(optionsArguments.contains(key), "\(key) not in optionsArguments")
     var arguments = from
     arguments.remove(key)
     from = arguments
@@ -377,6 +396,12 @@ private func processOption(_ key: String,
     } catch {
         guard !value.isEmpty else {
             throw FormatError.options("--\(key) option expects a value")
+        }
+        if case var FormatError.options(string) = error, !string.isEmpty {
+            if !string.contains(key) {
+                string += " in --\(key)"
+            }
+            throw FormatError.options(string)
         }
         throw FormatError.options("Unsupported --\(key) value '\(value)'")
     }
@@ -422,6 +447,16 @@ func fileOptionsFor(_ args: [String: String], in directory: String) throws -> Fi
         containsFileOption = true
         options.unexcludedGlobs += expandGlobs($0, in: directory)
     }
+    try processOption("minversion", in: args, from: &arguments) {
+        containsFileOption = true
+        guard let minVersion = Version(rawValue: $0) else {
+            throw FormatError.options("Unsupported --minversion value '\($0)'")
+        }
+        guard minVersion <= Version(stringLiteral: swiftFormatVersion) else {
+            throw FormatError.options("Project specifies SwiftFormat --minversion of \(minVersion)")
+        }
+        options.minVersion = minVersion
+    }
     assert(arguments.isEmpty, "\(arguments.joined(separator: ","))")
     return containsFileOption ? options : nil
 }
@@ -463,6 +498,7 @@ let fileArguments = [
     "symlinks",
     "exclude",
     "unexclude",
+    "minversion",
 ]
 
 let rulesArguments = [
@@ -477,6 +513,7 @@ let optionsArguments = fileArguments + rulesArguments + formattingArguments + in
 
 let commandLineArguments = [
     // Input options
+    "filelist",
     "config",
     "inferoptions",
     "output",

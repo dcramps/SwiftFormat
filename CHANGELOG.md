@@ -1,11 +1,85 @@
 # Change Log
 
+## [0.44.13](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.13) (2020-05-28)
+
+- Fixed indenting of closing bracket when using `wrapArguments` rule
+- Added `--shortoptionals` argument to selectively disable shortening of `Optional<T>` to `T?` for properties
+- Added `--minversion` argument to specify minimum SwiftFormat version to use for a given codebase
+
+## [0.44.12](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.12) (2020-05-27)
+
+- Fixed indenting of chained methods with trailing closures
+- SwiftFormat command-line tool now logs the location of .swiftformat configuration files that it encounters
+
+## [0.44.11](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.11) (2020-05-23)
+
+- Fixed failure to terminate when wrapping functions after first parameter
+- First element in a wrapped collection or function is now correctly indented
+- Added workaround for Swift type sugar parsing bug
+- The `blankLinesBetweenScopes` rule no longer inserts a blank line before an `#else` block
+- Downgraded "No eligible files found" error to a warning
+- Removed "Failed to format any files" error, which was sometimes triggered erroneously
+- Fixed deprecation warning when building on Linux
+
+## [0.44.10](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.10) (2020-05-14)
+
+- Fixed bug where `--specifierorder` option values were sorted alphabetically
+- Fixed a couple of bugs in `hoistPatternLet` when `--patternlet` is set to `inline`
+- Added support for hoisting/unhoisting `var` and `let` in `do ... catch` patterns
+- Added error if `--specifierorder` contains duplicate values
+
+## [0.44.9](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.9) (2020-05-05)
+
+- Added `--specifierorder` argument for overriding default order used by `specifiers` rule
+- Added `--nowrapoperators` argument for preventing `wrap` rule breaking at specific operators
+- The `redundantNilInit` rule no longer removes `nil` defaults from vars in structs using synthesized init
+- Fixed indenting of trailing comment delimiter in multiline comments
+
+## [0.44.8](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.8) (2020-05-01)
+
+- Fixed a significant performance regression introduced in 0.44.6
+- Changed ordering of `override` keyword in specifier lists to match SwiftLint
+- Fixed timeout due to infinite recursion when formatting nested comments
+- The `trailingSpace` rule is now called before `indent` to avoid noise when linting
+- Fixed bug where `unusedArguments` rule ignored all arguments if any was already ignored
+- Fixed `redundantParens` rule breaking closure argument lists where argument is named `self`
+- Fixed indenting of multiline string interpolations
+- Fixed broken formatting of multiline string interpolations
+- Fixed crash in `wrap` rule
+- The `wrap` rule now favors wrapping function args over wrapping at `.` operator
+- Fixed a bug with indenting of pre-formatted multiline comments
+- Fixed a misleading error message relating to `--tabwidth` option
+
+## [0.44.7](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.7) (2020-04-04)
+
+- Fixed indenting of wrapped closures after a switch statement
+- Fixed bug with `redundantNilInit` removing `nil` for properties using parameterized property wrappers
+- Fixed `redundantRawValues` rule not removing values for back-tick-escaped case names
+- Improved error messages for misnamed rules
+- Documentation improvements
+
+## [0.44.6](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.6) (2020-03-21)
+
+- Fixed timeout when formatting files containing multiple trailing closures
+- Added `--filelist` argument for specifying input source files list in a standalone file
+- Fixed bug in the git pre-commit hook suggested in the README file
+
+## [0.44.5](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.5) (2020-03-11)
+
+- Fixed bug with indenting of chained closures
+- Fixed bug where wrapped braces were over-indented
+- Fixed indenting of comments inside enum declarations
+- Improved consistency of `--xcodeindentation` output with Xcode's built-in formatting
+- Extension braces are now correctly wrapped
+- Switch statement braces are now correctly wrapped
+- Fixed bug where `duplicateImports` rule could remove a required `@testable` import
+
 ## [0.44.4](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.4) (2020-02-27)
 
 - Allman braces are now applied correctly for lines that end in a numeric literal
 - Blank line is now removed when stripping a redundant `return` keyword on its own line
 - Fixed space being inserted before the `.` in a nested PropertyWrapper expression
-- Fixed `return` being incorrectly removed inside `if` statements containing an unparenthesized closure
+- Fixed `return` being incorrectly removed inside `if` statements containing an un-parenthesized closure
 
 ## [0.44.3](https://github.com/nicklockwood/SwiftFormat/releases/tag/0.44.3) (2020-02-20)
 

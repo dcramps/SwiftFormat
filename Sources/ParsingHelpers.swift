@@ -107,12 +107,12 @@ extension Formatter {
                 return true
             case .endOfScope(")"):
                 guard let startIndex = self.index(of: .startOfScope("("), before: prevIndex),
-                    let index = self.index(of: .nonSpaceOrCommentOrLinebreak, before: startIndex, if: {
+                    last(.nonSpaceOrCommentOrLinebreak, before: startIndex, if: {
                         $0.isAttribute || _FormatRules.aclSpecifiers.contains($0.string)
-                    }) else {
+                    }) != nil else {
                     return false
                 }
-                prevIndex = index
+                prevIndex = startIndex
             case let .keyword(name), let .identifier(name):
                 if !allSpecifiers.contains(name), !name.hasPrefix("@") {
                     return false
@@ -311,10 +311,14 @@ extension Formatter {
             case .identifier:
                 prevIndex = prev
             case .operator("?", .postfix), .operator("!", .postfix):
-                guard token(at: prev - 1)?.isIdentifier == true else {
+                switch token(at: prev - 1) {
+                case .identifier?:
+                    prevIndex = prev - 1
+                case .keyword("init")?:
+                    return false
+                default:
                     return true
                 }
-                prevIndex = prev - 1
             case .operator("->", .infix), .keyword("init"), .keyword("subscript"):
                 return false
             default:
@@ -355,7 +359,7 @@ extension Formatter {
                     }
                 }
                 return false
-            case "func", "subscript", "class", "struct", "protocol", "enum":
+            case "func", "subscript", "class", "struct", "protocol", "enum", "extension":
                 return false
             default:
                 return true
@@ -418,23 +422,40 @@ extension Formatter {
     }
 
     func isConditionalStatement(at i: Int) -> Bool {
+        return startOfConditionalStatement(at: i) != nil
+    }
+
+    func startOfConditionalStatement(at i: Int) -> Int? {
         guard let index = indexOfLastSignificantKeyword(at: i) else {
-            return false
+            return nil
         }
-        switch tokens[index].string {
-        case "let", "var":
-            switch last(.nonSpaceOrCommentOrLinebreak, before: index) {
-            case .delimiter(",")?:
-                return true
-            case let .keyword(name)?:
-                return ["if", "guard", "while", "for", "case", "catch"].contains(name)
-            default:
+
+        func isAfterBrace(_ index: Int) -> Bool {
+            guard let braceIndex = lastIndex(of: .endOfScope("}"), in: index + 1 ..< i) else {
                 return false
             }
+            return self.index(of: .nonSpaceOrCommentOrLinebreak, in: braceIndex + 1 ..< i) != nil
+        }
+
+        switch tokens[index].string {
+        case "let", "var":
+            guard let prevIndex = self
+                .index(of: .nonSpaceOrCommentOrLinebreak, before: index) else {
+                return nil
+            }
+            switch tokens[prevIndex] {
+            case .delimiter(","):
+                return prevIndex
+            case let .keyword(name) where
+                ["if", "guard", "while", "for", "case", "catch"].contains(name):
+                return isAfterBrace(prevIndex) ? nil : prevIndex
+            default:
+                return nil
+            }
         case "if", "guard", "while", "for", "case", "where", "switch":
-            return true
+            return isAfterBrace(index) ? nil : index
         default:
-            return false
+            return nil
         }
     }
 
@@ -445,11 +466,6 @@ extension Formatter {
     func indexOfLastSignificantKeyword(at i: Int, excluding: [String] = []) -> Int? {
         guard let token = token(at: i),
             let index = token.isKeyword ? i : index(of: .keyword, before: i) else {
-            return nil
-        }
-        if let endBraceIndex = lastIndex(of: .endOfScope("}"), in: index ..< i),
-            let startIndex = self.index(of: .startOfScope("{"), before: endBraceIndex),
-            !isStartOfClosure(at: startIndex) {
             return nil
         }
         switch tokens[index].string {
@@ -709,8 +725,19 @@ extension Formatter {
         return false
     }
 
+    struct ImportRange: Comparable {
+        var module: String
+        var range: Range<Int>
+        var isTestable: Bool
+
+        static func < (lhs: ImportRange, rhs: ImportRange) -> Bool {
+            let la = lhs.module.lowercased()
+            let lb = rhs.module.lowercased()
+            return la == lb ? lhs.module < rhs.module : la < lb
+        }
+    }
+
     // Shared import rules implementation
-    typealias ImportRange = (String, Range<Int>)
     func parseImports() -> [[ImportRange]] {
         var importStack = [[ImportRange]]()
         var importRanges = [ImportRange]()
@@ -763,7 +790,12 @@ extension Formatter {
                     }
                     partIndex = nextPartIndex
                 }
-                importRanges.append((name, startIndex ..< endIndex as Range))
+                let range = startIndex ..< endIndex as Range
+                importRanges.append(ImportRange(
+                    module: name,
+                    range: range,
+                    isTestable: tokens[range].contains(.keyword("@testable"))
+                ))
             } else {
                 // Error
                 pushStack()
@@ -796,7 +828,7 @@ extension Formatter {
     }
 
     // Shared wrap implementation
-    func wrapCollectionsAndArguments(completePartialWrapping: Bool) {
+    func wrapCollectionsAndArguments(completePartialWrapping: Bool, wrapSingleArguments: Bool) {
         let maxWidth = options.maxWidth
         func removeLinebreakBeforeEndOfScope(at endOfScope: inout Int) {
             guard let lastIndex = index(of: .nonSpace, before: endOfScope, if: {
@@ -860,10 +892,18 @@ extension Formatter {
                 }
                 index = commaIndex
             }
-            // Insert linebreak after opening paren
-            if next(.nonSpaceOrComment, after: i)?.isLinebreak == false {
-                insertSpace(indent + options.indent, at: i + 1)
-                insertLinebreak(at: i + 1)
+            // Insert linebreak and indent after opening paren
+            if let nextIndex = self.index(of: .nonSpaceOrComment, after: i) {
+                if !tokens[nextIndex].isLinebreak {
+                    insertLinebreak(at: nextIndex)
+                }
+                if nextIndex + 1 < endOfScope {
+                    var indent = indent
+                    if (self.index(of: .nonSpace, after: nextIndex) ?? 0) < endOfScope {
+                        indent += options.indent
+                    }
+                    insertSpace(indent, at: nextIndex + 1)
+                }
             }
         }
         func wrapArgumentsAfterFirst(startOfScope i: Int, endOfScope: Int, allowGrouping: Bool) {
@@ -940,7 +980,7 @@ extension Formatter {
                     prevToken != .keyword("#imageLiteral") else {
                     return
                 }
-                guard hasMultipleArguments ||
+                guard hasMultipleArguments || wrapSingleArguments ||
                     index(in: i + 1 ..< endOfScope, where: { $0.isComment }) != nil else {
                     // Not an argument list, or only one argument
                     lastIndex = i
@@ -985,7 +1025,7 @@ extension Formatter {
                     assertionFailure() // Shouldn't happen
                 }
 
-            } else if maxWidth > 0, hasMultipleArguments {
+            } else if maxWidth > 0, hasMultipleArguments || wrapSingleArguments {
                 func willWrapAtStartOfReturnType(maxWidth: Int) -> Bool {
                     return isInReturnType(at: i) && maxWidth < lineLength(at: i)
                 }
@@ -1028,12 +1068,12 @@ extension Formatter {
 
                 func wrapArgumentsWithoutPartialWrapping() {
                     switch mode {
-                    case .preserve where isParameters, .beforeFirst:
+                    case .preserve, .beforeFirst:
                         wrapArgumentsBeforeFirst(startOfScope: i,
                                                  endOfScope: endOfScope,
                                                  allowGrouping: false,
                                                  endOfScopeOnSameLine: endOfScopeOnSameLine)
-                    case .afterFirst, .preserve:
+                    case .afterFirst:
                         wrapArgumentsAfterFirst(startOfScope: i,
                                                 endOfScope: endOfScope,
                                                 allowGrouping: true)
@@ -1043,14 +1083,14 @@ extension Formatter {
                 }
 
                 if currentRule == FormatRules.wrap {
-                    if let nextWrapIndex = indexOfNextWrap(),
+                    let nextWrapIndex = indexOfNextWrap() ?? endOfLine(at: i)
+                    if nextWrapIndex > lastIndex,
                         maxWidth < lineLength(from: max(lastIndex, 0), upTo: nextWrapIndex),
                         !willWrapAtStartOfReturnType(maxWidth: maxWidth) {
                         wrapArgumentsWithoutPartialWrapping()
                         lastIndex = nextWrapIndex
                         return
                     }
-
                 } else if maxWidth < lineLength(upTo: endOfScope) {
                     wrapArgumentsWithoutPartialWrapping()
                 }
@@ -1098,6 +1138,138 @@ extension Formatter {
         }
         removeToken(at: index)
     }
+
+    // Swift specifier keywords, in preferred order
+    var specifierOrder: [String] {
+        var priorities = [String: Int]()
+        for (i, specifiers) in _FormatRules.defaultSpecifierOrder.enumerated() {
+            for specifier in specifiers {
+                priorities[specifier] = i
+            }
+        }
+        var order = options.specifierOrder
+        for (i, specifiers) in _FormatRules.defaultSpecifierOrder.enumerated() {
+            for specifier in specifiers where !order.contains(specifier) {
+                var insertionPoint = order.count
+                for (index, s) in order.enumerated() {
+                    if let j = priorities[s] {
+                        if j > i {
+                            insertionPoint = index
+                        } else if j == i {
+                            insertionPoint = index + 1
+                        }
+                    }
+                }
+                order.insert(specifier, at: insertionPoint)
+            }
+        }
+        return order
+    }
+
+    /// Returns the index where the `wrap` rule should add the next linebreak in the line at the selected index.
+    ///
+    /// If the line does not need to be wrapped, this will return `nil`.
+    ///
+    /// - Note: This checks the entire line from the start of the line, the linebreak may be an index preceding the
+    ///         `index` passed to the function.
+    func indexWhereLineShouldWrapInLine(at index: Int) -> Int? {
+        return indexWhereLineShouldWrap(from: startOfLine(at: index))
+    }
+
+    func indexWhereLineShouldWrap(from index: Int) -> Int? {
+        var lineLength = self.lineLength(upTo: index)
+        var stringLiteralDepth = 0
+        var currentPriority = 0
+        var lastBreakPoint: Int?
+        var lastBreakPointPriority = Int.min
+
+        let maxWidth = options.maxWidth
+        guard maxWidth > 0 else { return nil }
+
+        func addBreakPoint(at i: Int, relativePriority: Int) {
+            guard stringLiteralDepth == 0, currentPriority + relativePriority >= lastBreakPointPriority,
+                !isInClosureArguments(at: i + 1) else {
+                return
+            }
+            let i = self.index(of: .nonSpace, before: i + 1) ?? i
+            if token(at: i + 1)?.isLinebreak == true || token(at: i)?.isLinebreak == true {
+                return
+            }
+            lastBreakPoint = i
+            lastBreakPointPriority = currentPriority + relativePriority
+        }
+
+        let tokens = self.tokens[index ..< endOfLine(at: index)]
+        for (i, token) in zip(tokens.indices, tokens) {
+            switch token {
+            case .linebreak:
+                return nil
+            case let .delimiter(string) where options.noWrapOperators.contains(string),
+                 let .operator(string, .infix) where options.noWrapOperators.contains(string):
+                // TODO: handle as/is
+                break
+            case .delimiter(","):
+                addBreakPoint(at: i, relativePriority: 0)
+            case .operator("=", .infix) where self.token(at: i + 1)?.isSpace == true:
+                addBreakPoint(at: i, relativePriority: -9)
+            case .operator(".", .infix):
+                addBreakPoint(at: i - 1, relativePriority: -2)
+            case .operator("->", .infix):
+                if isInReturnType(at: i) {
+                    currentPriority -= 5
+                }
+                addBreakPoint(at: i - 1, relativePriority: -5)
+            case .operator(_, .infix) where self.token(at: i + 1)?.isSpace == true:
+                addBreakPoint(at: i, relativePriority: -3)
+            case .startOfScope("{"):
+                if !isStartOfClosure(at: i) ||
+                    next(.keyword, after: i) != .keyword("in"),
+                    next(.nonSpace, after: i) != .endOfScope("}") {
+                    addBreakPoint(at: i, relativePriority: -6)
+                }
+                if isInReturnType(at: i) {
+                    currentPriority += 5
+                }
+                currentPriority -= 6
+            case .endOfScope("}"):
+                currentPriority += 6
+                if last(.nonSpace, before: i) != .startOfScope("{") {
+                    addBreakPoint(at: i - 1, relativePriority: -6)
+                }
+            case .startOfScope("("):
+                currentPriority -= 7
+            case .endOfScope(")"):
+                currentPriority += 7
+            case .startOfScope("["):
+                currentPriority -= 8
+            case .endOfScope("]"):
+                currentPriority += 8
+            case .startOfScope("<"):
+                currentPriority -= 9
+            case .endOfScope(">"):
+                currentPriority += 9
+            case .startOfScope where token.isStringDelimiter:
+                stringLiteralDepth += 1
+            case .endOfScope where token.isStringDelimiter:
+                stringLiteralDepth -= 1
+            case .keyword("else"), .keyword("where"):
+                addBreakPoint(at: i - 1, relativePriority: -1)
+            case .keyword("in"):
+                if last(.keyword, before: i) == .keyword("for") {
+                    addBreakPoint(at: i, relativePriority: -11)
+                    break
+                }
+                addBreakPoint(at: i, relativePriority: -5 - currentPriority)
+            default:
+                break
+            }
+            lineLength += tokenLength(token)
+            if lineLength > maxWidth, let breakPoint = lastBreakPoint, breakPoint < i {
+                return breakPoint
+            }
+        }
+        return nil
+    }
 }
 
 extension _FormatRules {
@@ -1122,24 +1294,24 @@ extension _FormatRules {
     }()
 
     // All specifiers
-    static let allSpecifiers = Set(specifierOrder)
+    static let allSpecifiers = Set(defaultSpecifierOrder.flatMap { $0 })
 
     // ACL specifiers
     static let aclSpecifiers = ["private", "fileprivate", "internal", "public"]
 
-    // Swift specifier keywords, in preferred order
-    static let specifierOrder = [
-        "private", "fileprivate", "internal", "public", "open",
-        "private(set)", "fileprivate(set)", "internal(set)", "public(set)",
-        "final", "dynamic", // Can't be both
-        "optional", "required",
-        "convenience",
-        "override",
-        "indirect",
-        "lazy",
-        "weak", "unowned",
-        "static", "class",
-        "mutating", "nonmutating",
-        "prefix", "postfix",
+    // Swift specifier keywords, in default order
+    static let defaultSpecifierOrder = [
+        ["override"],
+        ["private", "fileprivate", "internal", "public", "open"],
+        ["private(set)", "fileprivate(set)", "internal(set)", "public(set)"],
+        ["final", "dynamic"], // Can't be both
+        ["optional", "required"],
+        ["convenience"],
+        ["indirect"],
+        ["lazy"],
+        ["weak", "unowned"],
+        ["static", "class"],
+        ["mutating", "nonmutating"],
+        ["prefix", "postfix"],
     ]
 }

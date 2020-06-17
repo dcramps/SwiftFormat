@@ -785,8 +785,8 @@ private struct Examples {
     ```
 
     ```diff
-    - override public final func foo()
-    + public final override func foo()
+    - final public override func foo()
+    + override public final func foo()
     ```
 
     ```diff
@@ -802,7 +802,7 @@ private struct Examples {
     ```
 
     **NOTE:** assignment to un-escaped `self` is only supported in Swift 4.2 and
-    above, so the `strongifiedSelf` rule is disabled unless the swift version is
+    above, so the `strongifiedSelf` rule is disabled unless the Swift version is
     set to 4.2 or above.
     """
 
@@ -930,6 +930,7 @@ private struct Examples {
     let wrapArguments = """
     **NOTE:** For backwards compatibility with previous versions, if no value is
     provided for `--wrapparameters`, the value for `--wraparguments` will be used.
+
     `--wraparguments before-first`
 
     ```diff
@@ -955,15 +956,15 @@ private struct Examples {
     `--wrapparameters after-first`
 
     ```diff
-    - func foo(bar: Int,
-    -          baz: String) {
+    - func foo(
+    -   bar: Int,
+    -   baz: String
+    - ) {
         ...
       }
 
-    + func foo(
-    +   bar: Int,
-    +   baz: String
-    + ) {
+    + func foo(bar: Int,
+    +          baz: String) {
         ...
       }
     ```

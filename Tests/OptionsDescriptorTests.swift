@@ -633,12 +633,61 @@ class OptionsDescriptorTests: XCTestCase {
             (input: ";", isValid: false),
             (input: "?", isValid: false),
         ]
-        let fromOptionExpectations: [OptionArgumentMapping<[String]>] = [
+        let fromOptionExpectations: [OptionArgumentMapping<Set<String>>] = [
             (optionValue: [], argumentValue: ""),
             (optionValue: ["*", "/"], argumentValue: "*,/"),
         ]
         validateFromOptions(descriptor, keyPath: \FormatOptions.noSpaceOperators, expectations: fromOptionExpectations)
         validateArgumentsFreeTextType(descriptor, expectations: validations)
+        var options = FormatOptions()
+        XCTAssertNoThrow(try descriptor.toOptions("+,+", &options))
+    }
+
+    func testNoWrapOperators() {
+        let descriptor = FormatOptions.Descriptor.noWrapOperators
+        let validations: [FreeTextValidationExpectation] = [
+            (input: "+", isValid: true),
+            (input: "", isValid: true),
+            (input: ":", isValid: true),
+            (input: "foo", isValid: false),
+            (input: ";", isValid: true),
+            (input: "?", isValid: true),
+            (input: "try", isValid: false),
+            (input: "as", isValid: true),
+            (input: "as?", isValid: true),
+            (input: "is", isValid: true),
+            (input: "do", isValid: false),
+        ]
+        let fromOptionExpectations: [OptionArgumentMapping<Set<String>>] = [
+            (optionValue: [], argumentValue: ""),
+            (optionValue: ["*", "/"], argumentValue: "*,/"),
+        ]
+        validateFromOptions(descriptor, keyPath: \FormatOptions.noWrapOperators, expectations: fromOptionExpectations)
+        validateArgumentsFreeTextType(descriptor, expectations: validations)
+        var options = FormatOptions()
+        XCTAssertNoThrow(try descriptor.toOptions("+,+", &options))
+    }
+
+    func testSpecifierOrder() {
+        let descriptor = FormatOptions.Descriptor.specifierOrder
+        let validations: [FreeTextValidationExpectation] = [
+            (input: "public", isValid: true),
+            (input: "", isValid: true),
+            (input: "private(set)", isValid: true),
+            (input: "override", isValid: true),
+            (input: "class", isValid: true),
+            (input: "struct", isValid: false),
+        ]
+        let fromOptionExpectations: [OptionArgumentMapping<[String]>] = [
+            (optionValue: [], argumentValue: ""),
+            (optionValue: ["public(set)", "override"], argumentValue: "public(set),override"),
+        ]
+        validateFromOptions(descriptor, keyPath: \FormatOptions.specifierOrder, expectations: fromOptionExpectations)
+        validateArgumentsFreeTextType(descriptor, expectations: validations)
+        var options = FormatOptions()
+        XCTAssertThrowsError(try descriptor.toOptions("public,open,public", &options)) { error in
+            XCTAssert(error.localizedDescription.contains("Duplicate"))
+        }
     }
 
     // MARK: Deprecated

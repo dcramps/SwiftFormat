@@ -351,6 +351,119 @@ class TokenizerTests: XCTestCase {
         XCTAssertEqual(tokenize(input), output)
     }
 
+    func testMultilineStringWithMultilineInterpolation() {
+        let input = """
+        \"""
+        \\(
+            6
+        )
+        \"""
+        """
+        let output: [Token] = [
+            .startOfScope("\"\"\""),
+            .linebreak("\n", 1),
+            .stringBody("\\"),
+            .startOfScope("("),
+            .linebreak("\n", 2),
+            .space("    "),
+            .number("6", .integer),
+            .linebreak("\n", 3),
+            .endOfScope(")"),
+            .linebreak("\n", 4),
+            .endOfScope("\"\"\""),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
+    func testIndentMultilineStringWithMultilineNestedInterpolation() {
+        let input = """
+        \"""
+            foo
+                \\(bar {
+                    \"""
+                        baz
+                    \"""
+                })
+            quux
+        \"""
+        """
+        let output: [Token] = [
+            .startOfScope("\"\"\""),
+            .linebreak("\n", 1),
+            .stringBody("    foo"),
+            .linebreak("\n", 2),
+            .stringBody("        \\"),
+            .startOfScope("("),
+            .identifier("bar"),
+            .space(" "),
+            .startOfScope("{"),
+            .linebreak("\n", 3),
+            .space("            "),
+            .startOfScope("\"\"\""),
+            .linebreak("\n", 4),
+            .space("            "),
+            .stringBody("    baz"),
+            .linebreak("\n", 5),
+            .space("            "),
+            .endOfScope("\"\"\""),
+            .linebreak("\n", 6),
+            .space("        "),
+            .endOfScope("}"),
+            .endOfScope(")"),
+            .linebreak("\n", 7),
+            .stringBody("    quux"),
+            .linebreak("\n", 8),
+            .endOfScope("\"\"\""),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
+    func testIndentMultilineStringWithMultilineNestedInterpolation2() {
+        let input = """
+        \"""
+            foo
+                \\(bar {
+                    \"""
+                        baz
+                    \"""
+                    }
+                )
+            quux
+        \"""
+        """
+        let output: [Token] = [
+            .startOfScope("\"\"\""),
+            .linebreak("\n", 1),
+            .stringBody("    foo"),
+            .linebreak("\n", 2),
+            .stringBody("        \\"),
+            .startOfScope("("),
+            .identifier("bar"),
+            .space(" "),
+            .startOfScope("{"),
+            .linebreak("\n", 3),
+            .space("            "),
+            .startOfScope("\"\"\""),
+            .linebreak("\n", 4),
+            .space("            "),
+            .stringBody("    baz"),
+            .linebreak("\n", 5),
+            .space("            "),
+            .endOfScope("\"\"\""),
+            .linebreak("\n", 6),
+            .space("            "),
+            .endOfScope("}"),
+            .linebreak("\n", 7),
+            .space("        "),
+            .endOfScope(")"),
+            .linebreak("\n", 8),
+            .stringBody("    quux"),
+            .linebreak("\n", 9),
+            .endOfScope("\"\"\""),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
     func testMultilineStringWithEscapedTripleQuote() {
         let input = "\"\"\"\n\\\"\"\"\n\"\"\""
         let output: [Token] = [
@@ -632,6 +745,19 @@ class TokenizerTests: XCTestCase {
         XCTAssertEqual(tokenize(input), output)
     }
 
+    func testCommentIndentingWithTrailingClose() {
+        let input = "/* foo\n */"
+        let output: [Token] = [
+            .startOfScope("/*"),
+            .space(" "),
+            .commentBody("foo"),
+            .linebreak("\n", 1),
+            .space(" "),
+            .endOfScope("*/"),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
     func testNestedComments() {
         let input = "/*foo/*bar*/baz*/"
         let output: [Token] = [
@@ -694,6 +820,69 @@ class TokenizerTests: XCTestCase {
             .space(" "),
             .commentBody("}"),
             .linebreak("\n", 6),
+            .space(" "),
+            .endOfScope("*/"),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
+    func testPreformattedMultilineComment2() {
+        let input = """
+        /**
+        func foo() {
+            bar()
+        }
+        */
+        """
+        let output: [Token] = [
+            .startOfScope("/*"),
+            .commentBody("*"),
+            .linebreak("\n", 1),
+            .commentBody("func foo() {"),
+            .linebreak("\n", 2),
+            .commentBody("    bar()"),
+            .linebreak("\n", 3),
+            .commentBody("}"),
+            .linebreak("\n", 4),
+            .endOfScope("*/"),
+        ]
+        XCTAssertEqual(tokenize(input), output)
+    }
+
+    func testIndentedNestedMultilineComment() {
+        let input = """
+        /*
+         func foo() {
+             /*
+              * Nested comment
+              */
+             bar {}
+         }
+         */
+        """
+        let output: [Token] = [
+            .startOfScope("/*"),
+            .linebreak("\n", 1),
+            .space(" "),
+            .commentBody("func foo() {"),
+            .linebreak("\n", 2),
+            .space(" "),
+            .commentBody("    "),
+            .startOfScope("/*"),
+            .linebreak("\n", 3),
+            .space(" "),
+            .commentBody("     * Nested comment"),
+            .linebreak("\n", 4),
+            .space(" "),
+            .commentBody("     "),
+            .endOfScope("*/"),
+            .linebreak("\n", 5),
+            .space(" "),
+            .commentBody("    bar {}"),
+            .linebreak("\n", 6),
+            .space(" "),
+            .commentBody("}"),
+            .linebreak("\n", 7),
             .space(" "),
             .endOfScope("*/"),
         ]

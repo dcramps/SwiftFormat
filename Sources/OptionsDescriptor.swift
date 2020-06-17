@@ -38,6 +38,7 @@ extension FormatOptions {
             case binary(true: [String], false: [String])
             case `enum`([String])
             case text
+            case array
             case set
         }
 
@@ -197,8 +198,34 @@ extension FormatOptions {
         init(argumentName: String,
              propertyName: String,
              displayName: String,
-             help: String = "",
+             help: String,
              keyPath: WritableKeyPath<FormatOptions, [String]>,
+             validate: @escaping (String) throws -> Void = { _ in }) {
+            self.argumentName = argumentName
+            self.propertyName = propertyName
+            self.displayName = displayName
+            self.help = help
+            type = .array
+            toOptions = { value, options in
+                let values = parseCommaDelimitedList(value)
+                for (index, value) in values.enumerated() {
+                    if values[0 ..< index].contains(value) {
+                        throw FormatError.options("Duplicate value '\(value)'")
+                    }
+                    try validate(value)
+                }
+                options[keyPath: keyPath] = values
+            }
+            fromOptions = { options in
+                options[keyPath: keyPath].joined(separator: ",")
+            }
+        }
+
+        init(argumentName: String,
+             propertyName: String,
+             displayName: String,
+             help: String,
+             keyPath: WritableKeyPath<FormatOptions, Set<String>>,
              validate: @escaping (String) throws -> Void = { _ in }) {
             self.argumentName = argumentName
             self.propertyName = propertyName
@@ -208,10 +235,10 @@ extension FormatOptions {
             toOptions = { value, options in
                 let values = parseCommaDelimitedList(value)
                 try values.forEach(validate)
-                options[keyPath: keyPath] = values
+                options[keyPath: keyPath] = Set(values)
             }
             fromOptions = { options in
-                options[keyPath: keyPath].joined(separator: ",")
+                options[keyPath: keyPath].sorted().joined(separator: ",")
             }
         }
     }
@@ -253,6 +280,9 @@ extension FormatOptions.Descriptor {
         tabWidth,
         maxWidth,
         noSpaceOperators,
+        noWrapOperators,
+        specifierOrder,
+        shortOptionals,
 
         // Deprecated
         indentComments,
@@ -586,6 +616,43 @@ extension FormatOptions.Descriptor {
             }
         }
     )
+    static let noWrapOperators = FormatOptions.Descriptor(
+        argumentName: "nowrapoperators",
+        propertyName: "noWrapOperators",
+        displayName: "No-wrap Operators",
+        help: "Comma-delimited list of operators that shouldn't be wrapped",
+        keyPath: \FormatOptions.noWrapOperators,
+        validate: {
+            switch $0 {
+            case ":", ";", "is", "as", "as!", "as?":
+                break
+            case _ where !$0.isOperator:
+                throw FormatError.options("'\($0)' is not a valid infix operator")
+            default:
+                break
+            }
+        }
+    )
+    static let specifierOrder = FormatOptions.Descriptor(
+        argumentName: "specifierorder",
+        propertyName: "specifierOrder",
+        displayName: "Specifier Order",
+        help: "Comma-delimited list of specifiers in preferred order",
+        keyPath: \FormatOptions.specifierOrder,
+        validate: {
+            guard _FormatRules.allSpecifiers.contains($0) else {
+                throw FormatError.options("'\($0)' is not a valid specifier")
+            }
+        }
+    )
+    static let shortOptionals = FormatOptions.Descriptor(
+        argumentName: "shortoptionals",
+        propertyName: "shortOptionals",
+        displayName: "Short Optional Syntax",
+        help: "Use ? for Optionals \"always\" (default) or \"except-properties\"",
+        keyPath: \.shortOptionals,
+        options: ["always", "except-properties"]
+    )
 
     // MARK: - Internal
 
@@ -611,7 +678,7 @@ extension FormatOptions.Descriptor {
         argumentName: "swiftversion",
         propertyName: "swiftVersion",
         displayName: "Swift Version",
-        help: "The version of swift used in the project being formatted",
+        help: "The version of Swift used in the files being formatted",
         keyPath: \.swiftVersion
     )
 

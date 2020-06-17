@@ -44,6 +44,11 @@ class ParsingHelpersTests: XCTestCase {
         XCTAssertFalse(formatter.isStartOfClosure(at: 4))
     }
 
+    func testExtensionBracesNotTreatedAsClosure() {
+        let formatter = Formatter(tokenize("extension Foo {}"))
+        XCTAssertFalse(formatter.isStartOfClosure(at: 4))
+    }
+
     // conditional statements
 
     func testIfBracesNotTreatedAsClosure() {
@@ -160,6 +165,16 @@ class ParsingHelpersTests: XCTestCase {
     func testInitAllmanBracesNotTreatedAsClosure() {
         let formatter = Formatter(tokenize("init()\n{\n    foo = 5\n}"))
         XCTAssertFalse(formatter.isStartOfClosure(at: 4))
+    }
+
+    func testOptionalInitNotTreatedAsClosure() {
+        let formatter = Formatter(tokenize("init?() { return nil }"))
+        XCTAssertFalse(formatter.isStartOfClosure(at: 5))
+    }
+
+    func testOptionalInitAllmanBracesNotTreatedAsClosure() {
+        let formatter = Formatter(tokenize("init?()\n{\n    return nil\n}"))
+        XCTAssertFalse(formatter.isStartOfClosure(at: 5))
     }
 
     func testDeinitBracesNotTreatedAsClosure() {
@@ -312,6 +327,55 @@ class ParsingHelpersTests: XCTestCase {
         XCTAssert(formatter.isStartOfClosure(at: 21))
     }
 
+    // edge cases
+
+    func testMultipleNestedTrailingClosures() {
+        let repeatCount = 2
+        let formatter = Formatter(tokenize("""
+        override func foo() {
+        bar {
+        var baz = 5
+        \(String(repeating: """
+        fizz {
+        buzz {
+        fizzbuzz()
+        }
+        }
+
+        """, count: repeatCount))}
+        }
+        """))
+        XCTAssertFalse(formatter.isStartOfClosure(at: 8))
+        XCTAssert(formatter.isStartOfClosure(at: 12))
+        for i in stride(from: 0, to: repeatCount * 16, by: 16) {
+            XCTAssert(formatter.isStartOfClosure(at: 24 + i))
+            XCTAssert(formatter.isStartOfClosure(at: 28 + i))
+        }
+    }
+
+    func testWrappedClosureAfterAnIfStatement() {
+        let formatter = Formatter(tokenize("""
+        if foo {}
+        bar
+            .baz {}
+        """))
+        XCTAssert(formatter.isStartOfClosure(at: 13))
+    }
+
+    func testWrappedClosureAfterSwitch() {
+        let formatter = Formatter(tokenize("""
+        switch foo {
+        default:
+            break
+        }
+        bar
+            .map {
+                // baz
+            }
+        """))
+        XCTAssert(formatter.isStartOfClosure(at: 20))
+    }
+
     // MARK: isAccessorKeyword
 
     func testDidSet() {
@@ -380,5 +444,26 @@ class ParsingHelpersTests: XCTestCase {
         }
         """))
         XCTAssert(formatter.isAccessorKeyword(at: 10, checkKeyword: false))
+    }
+
+    // MARK: specifierOrder
+
+    func testSpecifierOrder() {
+        let options = FormatOptions(specifierOrder: ["convenience", "override"])
+        let formatter = Formatter([], options: options)
+        XCTAssertEqual(formatter.specifierOrder, [
+            "private", "fileprivate", "internal", "public", "open",
+            "private(set)", "fileprivate(set)", "internal(set)", "public(set)",
+            "final", "dynamic",
+            "optional", "required",
+            "convenience",
+            "override",
+            "indirect",
+            "lazy",
+            "weak", "unowned",
+            "static", "class",
+            "mutating", "nonmutating",
+            "prefix", "postfix",
+        ])
     }
 }

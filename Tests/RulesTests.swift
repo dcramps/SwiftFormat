@@ -41,10 +41,11 @@ class RulesTests: XCTestCase {
                        options: options, exclude: exclude)
     }
 
-    func testFormatting(for input: String, _ outputs: [String], rules: [FormatRule],
+    func testFormatting(for input: String, _ outputs: [String] = [], rules: [FormatRule],
                         options: FormatOptions = .default, exclude: [String] = []) {
         precondition(input != outputs.first || input != outputs.last, "Redundant output parameter")
         precondition((0 ... 2).contains(outputs.count), "Only 0, 1 or 2 output parameters permitted")
+        precondition(Set(exclude).intersection(rules.map { $0.name }).isEmpty, "Cannot exclude rule under test")
         let output = outputs.first ?? input, output2 = outputs.last ?? input
         let exclude = exclude + (rules.first?.name == "linebreakAtEndOfFile" ? [] : ["linebreakAtEndOfFile"])
         XCTAssertEqual(try format(input, rules: rules, options: options), output)
@@ -92,7 +93,7 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.spaceAroundParens)
     }
 
-    func testAddSpaceBetweenAutoclosureEscapingAndBlock() { // swift 2.3 only
+    func testAddSpaceBetweenAutoclosureEscapingAndBlock() { // Swift 2.3 only
         let input = "@autoclosure(escaping)() -> Void"
         let output = "@autoclosure(escaping) () -> Void"
         testFormatting(for: input, output, rule: FormatRules.spaceAroundParens)
@@ -1318,6 +1319,22 @@ class RulesTests: XCTestCase {
                        exclude: ["emptyBraces"])
     }
 
+    func testNoInsertBlankLinesInConditionalCompilation() {
+        let input = """
+        struct Foo {
+            #if BAR
+                func something() {
+                }
+            #else
+                func something() {
+                }
+            #endif
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.blankLinesBetweenScopes,
+                       exclude: ["emptyBraces"])
+    }
+
     // MARK: - blankLinesAroundMark
 
     func testInsertBlankLinesAroundMark() {
@@ -1621,14 +1638,50 @@ class RulesTests: XCTestCase {
     }
 
     func testIndentSwitchCaseCommentsCorrectly() {
-        let input = "switch x {\n// comment\ncase y:\n// comment\nbreak\n// comment\ncase z:\nbreak\n}"
-        let output = "switch x {\n// comment\ncase y:\n    // comment\n    break\n// comment\ncase z:\n    break\n}"
+        let input = """
+        switch x {
+        // comment
+        case y:
+        // comment
+        break
+        // comment
+        case z:
+        break
+        }
+        """
+        let output = """
+        switch x {
+        // comment
+        case y:
+            // comment
+            break
+        // comment
+        case z:
+            break
+        }
+        """
         testFormatting(for: input, output, rule: FormatRules.indent)
     }
 
     func testIndentMultilineSwitchCaseCommentsCorrectly() {
         let input = "switch x {\n/*\n * comment\n */\ncase y:\nbreak\n/*\n * comment\n */\ndefault:\nbreak\n}"
         let output = "switch x {\n/*\n * comment\n */\ncase y:\n    break\n/*\n * comment\n */\ndefault:\n    break\n}"
+        testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
+    func testIndentEnumCaseComment() {
+        let input = """
+        enum Foo {
+           /// bar
+           case bar
+        }
+        """
+        let output = """
+        enum Foo {
+            /// bar
+            case bar
+        }
+        """
         testFormatting(for: input, output, rule: FormatRules.indent)
     }
 
@@ -1681,6 +1734,33 @@ class RulesTests: XCTestCase {
         }
         """
         testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testWrappedClassDeclaration() {
+        let input = """
+        class Foo: Bar,
+            Baz {
+            init() {}
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testWrappedClassDeclarationLikeXcode() {
+        let input = """
+        class Foo: Bar,
+            Baz {
+            init() {}
+        }
+        """
+        let output = """
+        class Foo: Bar,
+        Baz {
+            init() {}
+        }
+        """
+        let options = FormatOptions(xcodeIndentation: true)
+        testFormatting(for: input, output, rule: FormatRules.indent, options: options)
     }
 
     // indentCase = true
@@ -2046,6 +2126,18 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.indent)
     }
 
+    func testChainedClosureIndentsAfterIfCondition() {
+        let input = "if foo {\nbar()\n.baz()\n}\n\nfoo\n.bar {\nbaz()\n}\n.bar {\nbaz()\n}"
+        let output = "if foo {\n    bar()\n        .baz()\n}\n\nfoo\n    .bar {\n        baz()\n    }\n    .bar {\n        baz()\n    }"
+        testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
+    func testChainedClosureIndentsAfterIfCondition2() {
+        let input = "if foo {\nbar()\n.baz()\n}\n\nfoo\n.bar {\nbaz()\n}.bar {\nbaz()\n}"
+        let output = "if foo {\n    bar()\n        .baz()\n}\n\nfoo\n    .bar {\n        baz()\n    }.bar {\n        baz()\n    }"
+        testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
     func testChainedClosureIndentsAfterVarDeclaration() {
         let input = "var foo: Int\nfoo\n.bar {\nbaz()\n}\n.bar {\nbaz()\n}"
         let output = "var foo: Int\nfoo\n    .bar {\n        baz()\n    }\n    .bar {\n        baz()\n    }"
@@ -2056,6 +2148,16 @@ class RulesTests: XCTestCase {
         let input = "let foo: Int\nfoo\n.bar {\nbaz()\n}\n.bar {\nbaz()\n}"
         let output = "let foo: Int\nfoo\n    .bar {\n        baz()\n    }\n    .bar {\n        baz()\n    }"
         testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
+    func testWrappedClosureIndentAfterAssignment() {
+        let input = """
+        let bar =
+            baz { _ in
+                print("baz")
+            }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
     }
 
     func testChainedFunctionsInPropertySetter() {
@@ -2185,6 +2287,20 @@ class RulesTests: XCTestCase {
         let input = """
         @discardableResult
         func foo() -> Int { 5 }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testIndentWrappedClosureAfterSwitch() {
+        let input = """
+        switch foo {
+        default:
+            break
+        }
+        bar
+            .map {
+                // baz
+            }
         """
         testFormatting(for: input, rule: FormatRules.indent)
     }
@@ -2323,9 +2439,47 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.indent)
     }
 
+    func testCommentIndentingWithTrailingClose2() {
+        let input = "/* foo\n*/"
+        let output = "/* foo\n */"
+        testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
     func testNestedCommentIndenting() {
-        let input = "/* foo\n/*\nbar\n*/\n*/"
-        let output = "/* foo\n /*\n  bar\n  */\n */"
+        let input = """
+        /*
+         class foo() {
+             /*
+              * Nested comment
+              */
+             bar {}
+         }
+         */
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testNestedCommentIndenting2() {
+        let input = """
+        /**
+        Some description;
+        ```
+        func foo() {
+            bar()
+        }
+        ```
+        */
+        """
+        let output = """
+        /**
+         Some description;
+         ```
+         func foo() {
+             bar()
+         }
+         ```
+         */
+        """
         testFormatting(for: input, output, rule: FormatRules.indent)
     }
 
@@ -2414,6 +2568,56 @@ class RulesTests: XCTestCase {
         \""")
         """
         testFormatting(for: input, output, rule: FormatRules.indent)
+    }
+
+    func testIndentMultilineStringWithMultilineInterpolation() {
+        let input = """
+        func foo() {
+            \"""
+                bar
+                    \\(bar.map {
+                        baz
+                    })
+                quux
+            \"""
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testIndentMultilineStringWithMultilineNestedInterpolation() {
+        let input = """
+        func foo() {
+            \"""
+                bar
+                    \\(bar.map {
+                        \"""
+                            quux
+                        \"""
+                    })
+                quux
+            \"""
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
+    }
+
+    func testIndentMultilineStringWithMultilineNestedInterpolation2() {
+        let input = """
+        func foo() {
+            \"""
+                bar
+                    \\(bar.map {
+                        \"""
+                            quux
+                        \"""
+                    }
+                    )
+                quux
+            \"""
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.indent)
     }
 
     // indent multiline raw strings
@@ -2937,6 +3141,24 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.indent, options: options)
     }
 
+    // indent blank lines
+
+    func testTruncateBlankLineBeforeIndenting() {
+        // NOTE: don't convert to multiline string
+        let input =
+            "func foo() {\n" +
+            "    guard bar = baz else { return }\n" +
+            "    \n" + // should not be indented
+            "    quux()\n" +
+            "}"
+
+        let rules = [FormatRules.indent, FormatRules.trailingSpace]
+        let options = FormatOptions(truncateBlankLines: true)
+        XCTAssertEqual(try lint(input, rules: rules, options: options), [
+            Formatter.Change(line: 3, rule: FormatRules.trailingSpace, filePath: nil),
+        ])
+    }
+
     // MARK: - braces
 
     func testAllmanBracesAreConverted() {
@@ -3148,6 +3370,36 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.braces)
     }
 
+    func testBracesForExtension() {
+        let input = """
+        extension Foo
+        {
+            // foo
+        }
+        """
+        let output = """
+        extension Foo {
+            // foo
+        }
+        """
+        testFormatting(for: input, output, rule: FormatRules.braces)
+    }
+
+    func testBracesForOptionalInit() {
+        let input = """
+        init?()
+        {
+            return nil
+        }
+        """
+        let output = """
+        init?() {
+            return nil
+        }
+        """
+        testFormatting(for: input, output, rule: FormatRules.braces)
+    }
+
     // allman style
 
     func testKnRBracesAreConverted() {
@@ -3253,6 +3505,22 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.braces, options: options)
     }
 
+    func testAllmanBracesForOptionalInit() {
+        let input = """
+        init?() {
+            return nil
+        }
+        """
+        let output = """
+        init?()
+        {
+            return nil
+        }
+        """
+        let options = FormatOptions(allmanBraces: true)
+        testFormatting(for: input, output, rule: FormatRules.braces, options: options)
+    }
+
     func testAllmanBracesForIfStatement() {
         let input = """
         if foo {
@@ -3277,6 +3545,22 @@ class RulesTests: XCTestCase {
         """
         let output = """
         if foo > 0
+        {
+            // foo
+        }
+        """
+        let options = FormatOptions(allmanBraces: true)
+        testFormatting(for: input, output, rule: FormatRules.braces, options: options)
+    }
+
+    func testAllmanBracesForExtension() {
+        let input = """
+        extension Foo {
+            // foo
+        }
+        """
+        let output = """
+        extension Foo
         {
             // foo
         }
@@ -3801,6 +4085,13 @@ class RulesTests: XCTestCase {
         let input = "prefix public static func - (rhs: Foo) -> Foo"
         let output = "public static prefix func - (rhs: Foo) -> Foo"
         let options = FormatOptions(fragment: true)
+        testFormatting(for: input, output, rule: FormatRules.specifiers, options: options)
+    }
+
+    func testSpecifierOrder() {
+        let input = "override public var foo: Int { 5 }"
+        let output = "public override var foo: Int { 5 }"
+        let options = FormatOptions(specifierOrder: ["public", "override"])
         testFormatting(for: input, output, rule: FormatRules.specifiers, options: options)
     }
 
@@ -4358,6 +4649,21 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, rule: FormatRules.redundantParens)
     }
 
+    func testClosureArgsContainingSelfNotUnwrapped() {
+        let input = "{ (self) in self }"
+        testFormatting(for: input, rule: FormatRules.redundantParens)
+    }
+
+    func testClosureArgsContainingSelfNotUnwrapped2() {
+        let input = "{ (foo, self) in foo(self) }"
+        testFormatting(for: input, rule: FormatRules.redundantParens)
+    }
+
+    func testClosureArgsContainingSelfNotUnwrapped3() {
+        let input = "{ (self, foo) in foo(self) }"
+        testFormatting(for: input, rule: FormatRules.redundantParens)
+    }
+
     // before trailing closure
 
     func testParensRemovedBeforeTrailingClosure() {
@@ -4816,6 +5122,27 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, rule: FormatRules.trailingClosures)
     }
 
+    // multiple closures
+
+    func testMultipleNestedClosures() throws {
+        let repeatCount = 10
+        let input = """
+        override func foo() {
+            bar {
+                var baz = 5
+        \(String(repeating: """
+                fizz {
+                    buzz {
+                        fizzbuzz()
+                    }
+                }
+
+        """, count: repeatCount))    }
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.trailingClosures)
+    }
+
     // MARK: - redundantGet
 
     func testRemoveSingleLineIsolatedGet() {
@@ -4896,14 +5223,58 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, rule: FormatRules.redundantNilInit)
     }
 
-    func testNoRemoveNilInitWithCustomAttribute() {
+    func testNoRemoveNilInitWithPropertyWrapper() {
         let input = "@Foo var foo: Int? = nil"
+        testFormatting(for: input, rule: FormatRules.redundantNilInit)
+    }
+
+    func testNoRemoveNilInitWithLowercasePropertyWrapper() {
+        let input = "@foo var foo: Int? = nil"
+        testFormatting(for: input, rule: FormatRules.redundantNilInit)
+    }
+
+    func testNoRemoveNilInitWithPropertyWrapperWithArgument() {
+        let input = "@Foo(bar: baz) var foo: Int? = nil"
+        testFormatting(for: input, rule: FormatRules.redundantNilInit)
+    }
+
+    func testNoRemoveNilInitWithLowercasePropertyWrapperWithArgument() {
+        let input = "@foo(bar: baz) var foo: Int? = nil"
         testFormatting(for: input, rule: FormatRules.redundantNilInit)
     }
 
     func testRemoveNilInitWithObjcAttributes() {
         let input = "@objc var foo: Int? = nil"
         let output = "@objc var foo: Int?"
+        testFormatting(for: input, output, rule: FormatRules.redundantNilInit)
+    }
+
+    func testNoRemoveNilInitInStructWithDefaultInit() {
+        let input = """
+        struct Foo {
+            var bar: String? = nil
+        }
+        """
+        testFormatting(for: input, rule: FormatRules.redundantNilInit)
+    }
+
+    func testRemoveNilInitInStructWithCustomInit() {
+        let input = """
+        struct Foo {
+            var bar: String? = nil
+            init() {
+                bar = "bar"
+            }
+        }
+        """
+        let output = """
+        struct Foo {
+            var bar: String?
+            init() {
+                bar = "bar"
+            }
+        }
+        """
         testFormatting(for: input, output, rule: FormatRules.redundantNilInit)
     }
 
@@ -5003,6 +5374,12 @@ class RulesTests: XCTestCase {
     func testRemoveCommaDelimitedCaseRawStringCases() {
         let input = "enum Foo: String { case bar = \"bar\", baz = \"baz\" }"
         let output = "enum Foo: String { case bar, baz }"
+        testFormatting(for: input, output, rule: FormatRules.redundantRawValues)
+    }
+
+    func testRemoveBacktickCaseRawStringCases() {
+        let input = "enum Foo: String { case `as` = \"as\", `let` = \"let\" }"
+        let output = "enum Foo: String { case `as`, `let` }"
         testFormatting(for: input, output, rule: FormatRules.redundantRawValues)
     }
 
@@ -7127,6 +7504,18 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, rule: FormatRules.unusedArguments)
     }
 
+    func testPartiallyMarkedUnusedArguments() {
+        let input = "func foo(bar: Bar, baz _: Baz) {}"
+        let output = "func foo(bar _: Bar, baz _: Baz) {}"
+        testFormatting(for: input, output, rule: FormatRules.unusedArguments)
+    }
+
+    func testPartiallyMarkedUnusedArguments2() {
+        let input = "func foo(bar _: Bar, baz: Baz) {}"
+        let output = "func foo(bar _: Bar, baz _: Baz) {}"
+        testFormatting(for: input, output, rule: FormatRules.unusedArguments)
+    }
+
     // functions (closure-only)
 
     func testNoMarkFunctionArgument() {
@@ -7194,6 +7583,12 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.hoistPatternLet)
     }
 
+    func testHoistLabelledCaseLet() {
+        let input = "if case .foo(bar: let bar, baz: let baz) = quux {}"
+        let output = "if case let .foo(bar: bar, baz: baz) = quux {}"
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet)
+    }
+
     func testHoistCaseVar() {
         let input = "if case .foo(var bar, var baz) = quux {}"
         let output = "if case var .foo(bar, baz) = quux {}"
@@ -7251,6 +7646,18 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.hoistPatternLet)
     }
 
+    func testHoistCommaSeparatedSwitchCaseLets() {
+        let input = "switch foo {\ncase .foo(let bar), .bar(let bar):\n}"
+        let output = "switch foo {\ncase let .foo(bar), let .bar(bar):\n}"
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet)
+    }
+
+    func testHoistCatchLet() {
+        let input = "do {} catch Foo.foo(bar: let bar) {}"
+        let output = "do {} catch let Foo.foo(bar: bar) {}"
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet)
+    }
+
     func testNoNestedHoistLetWithSpecifiedArgs() {
         let input = "if case (.foo(let a, b), .bar(let c, d)) = quux {}"
         testFormatting(for: input, rule: FormatRules.hoistPatternLet)
@@ -7292,6 +7699,13 @@ class RulesTests: XCTestCase {
     func testUnhoistCaseLet() {
         let input = "if case let .foo(bar, baz) = quux {}"
         let output = "if case .foo(let bar, let baz) = quux {}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
+    func testUnhoistLabelledCaseLet() {
+        let input = "if case let .foo(bar: bar, baz: baz) = quux {}"
+        let output = "if case .foo(bar: let bar, baz: let baz) = quux {}"
         let options = FormatOptions(hoistPatternLet: false)
         testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
     }
@@ -7347,6 +7761,34 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
     }
 
+    func testNestedUnhoistLet() {
+        let input = "if case let (.foo(a, b), .bar(c, d)) = quux {}"
+        let output = "if case (.foo(let a, let b), .bar(let c, let d)) = quux {}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
+    func testUnhoistCommaSeparatedSwitchCaseLets() {
+        let input = "switch foo {\ncase let .foo(bar), let .bar(bar):\n}"
+        let output = "switch foo {\ncase .foo(let bar), .bar(let bar):\n}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
+    func testUnhoistCommaSeparatedSwitchCaseLets2() {
+        let input = "switch foo {\ncase let Foo.foo(bar), let Foo.bar(bar):\n}"
+        let output = "switch foo {\ncase Foo.foo(let bar), Foo.bar(let bar):\n}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
+    func testUnhoistCatchLet() {
+        let input = "do {} catch let Foo.foo(bar: bar) {}"
+        let output = "do {} catch Foo.foo(bar: let bar) {}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, output, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
     func testNoUnhoistTupleLet() {
         let input = "let (bar, baz) = quux()"
         let options = FormatOptions(hoistPatternLet: false)
@@ -7355,6 +7797,12 @@ class RulesTests: XCTestCase {
 
     func testNoUnhoistIfLetTuple() {
         let input = "if let x = y, let (_, a) = z {}"
+        let options = FormatOptions(hoistPatternLet: false)
+        testFormatting(for: input, rule: FormatRules.hoistPatternLet, options: options)
+    }
+
+    func testNoUnhoistIfCaseFollowedByLetTuple() {
+        let input = "if case .foo = bar, let (foo, bar) = baz {}"
         let options = FormatOptions(hoistPatternLet: false)
         testFormatting(for: input, rule: FormatRules.hoistPatternLet, options: options)
     }
@@ -7696,6 +8144,47 @@ class RulesTests: XCTestCase {
                        exclude: ["spaceAroundOperators"])
     }
 
+    func testNoWrapSingleParameter() {
+        let input = "let fooBar = try unkeyedContainer.decode(FooBar.self)"
+        let output = """
+        let fooBar = try unkeyedContainer
+            .decode(FooBar.self)
+        """
+        let options = FormatOptions(maxWidth: 50)
+        testFormatting(for: input, output, rule: FormatRules.wrap, options: options)
+    }
+
+    func testWrapSingleParameter() {
+        let input = "let fooBar = try unkeyedContainer.decode(FooBar.self)"
+        let output = """
+        let fooBar = try unkeyedContainer.decode(
+            FooBar.self
+        )
+        """
+        let options = FormatOptions(maxWidth: 50, noWrapOperators: [".", "="])
+        testFormatting(for: input, output, rule: FormatRules.wrap, options: options)
+    }
+
+    func testWrapFunctionArrow() {
+        let input = "func foo() -> Int {}"
+        let output = """
+        func foo()
+            -> Int {}
+        """
+        let options = FormatOptions(maxWidth: 14)
+        testFormatting(for: input, output, rule: FormatRules.wrap, options: options)
+    }
+
+    func testNoWrapFunctionArrow() {
+        let input = "func foo() -> Int {}"
+        let output = """
+        func foo(
+        ) -> Int {}
+        """
+        let options = FormatOptions(maxWidth: 14, noWrapOperators: ["->"])
+        testFormatting(for: input, output, rule: FormatRules.wrap, options: options)
+    }
+
     func testNoCrashWrap() {
         let input = """
         struct Foo {
@@ -7705,7 +8194,9 @@ class RulesTests: XCTestCase {
         let output = """
         struct Foo {
             func bar(
-                a: Set<B>,
+                a: Set<
+                    B
+                >,
                 c: D
             ) {}
         }
@@ -7713,6 +8204,47 @@ class RulesTests: XCTestCase {
         let options = FormatOptions(maxWidth: 10)
         testFormatting(for: input, output, rule: FormatRules.wrap, options: options,
                        exclude: ["unusedArguments"])
+    }
+
+    func testNoCrashWrap2() {
+        let input = """
+        struct Test {
+            func webView(_: WKWebView, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+                authenticationChallengeProcessor.process(challenge: challenge, completionHandler: completionHandler)
+            }
+        }
+        """
+        let output = """
+        struct Test {
+            func webView(
+                _: WKWebView,
+                didReceive challenge: URLAuthenticationChallenge,
+                completionHandler: @escaping (URLSession.AuthChallengeDisposition,
+                                              URLCredential?) -> Void
+            ) {
+                authenticationChallengeProcessor.process(
+                    challenge: challenge,
+                    completionHandler: completionHandler
+                )
+            }
+        }
+        """
+        let options = FormatOptions(maxWidth: 80)
+        testFormatting(for: input, output, rule: FormatRules.wrap, options: options,
+                       exclude: ["indent", "wrapArguments"])
+    }
+
+    func testNoCrashWrap3() throws {
+        let input = """
+        override func invalidationContext(forBoundsChange newBounds: CGRect) -> UICollectionViewLayoutInvalidationContext {
+            let context = super.invalidationContext(forBoundsChange: newBounds) as! UICollectionViewFlowLayoutInvalidationContext
+            context.invalidateFlowLayoutDelegateMetrics = newBounds.size != collectionView?.bounds.size
+            return context
+        }
+        """
+        let options = FormatOptions(wrapArguments: .afterFirst, maxWidth: 100)
+        let rules = [FormatRules.wrap, FormatRules.wrapArguments]
+        XCTAssertNoThrow(try format(input, rules: rules, options: options))
     }
 
     // MARK: - wrapArguments
@@ -7796,6 +8328,46 @@ class RulesTests: XCTestCase {
         let output = "func foo(\n    bar _: Int,\n    baz _: String\n) {}"
         let options = FormatOptions(wrapParameters: .preserve)
         testFormatting(for: input, output, rule: FormatRules.wrapArguments, options: options)
+    }
+
+    func testIndentFirstElementWhenApplyingWrap() {
+        let input = """
+        let foo = Set([
+        Thing(),
+        Thing(),
+        ])
+        """
+        let output = """
+        let foo = Set([
+            Thing(),
+            Thing(),
+        ])
+        """
+        testFormatting(for: input, output, rule: FormatRules.wrapArguments)
+    }
+
+    func testWrapArgumentsDoesntIndentTrailingComment() {
+        let input = """
+        foo( // foo
+        bar: Int
+        )
+        """
+        let output = """
+        foo( // foo
+            bar: Int
+        )
+        """
+        testFormatting(for: input, output, rule: FormatRules.wrapArguments)
+    }
+
+    func testWrapArgumentsDoesntIndentClosingBracket() {
+        let input = """
+        [
+            "foo": [
+            ],
+        ]
+        """
+        testFormatting(for: input, rule: FormatRules.wrapArguments)
     }
 
     // MARK: afterFirst
@@ -9357,6 +9929,18 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.duplicateImports)
     }
 
+    func testNoRemoveTestableDuplicateImport() {
+        let input = "import Foo\n@testable import Foo"
+        let output = "\n@testable import Foo"
+        testFormatting(for: input, output, rule: FormatRules.duplicateImports)
+    }
+
+    func testNoRemoveTestableDuplicateImport2() {
+        let input = "@testable import Foo\nimport Foo"
+        let output = "@testable import Foo"
+        testFormatting(for: input, output, rule: FormatRules.duplicateImports)
+    }
+
     // MARK: - strongOutlets
 
     func testRemoveWeakFromOutlet() {
@@ -10022,6 +10606,8 @@ class RulesTests: XCTestCase {
 
     // MARK: - typeSugar
 
+    // arrays
+
     func testArrayTypeConvertedToSugar() {
         let input = "var foo: Array<String>"
         let output = "var foo: [String]"
@@ -10031,42 +10617,6 @@ class RulesTests: XCTestCase {
     func testSwiftArrayTypeConvertedToSugar() {
         let input = "var foo: Swift.Array<String>"
         let output = "var foo: [String]"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testDictionaryTypeConvertedToSugar() {
-        let input = "var foo: Dictionary<String, Int>"
-        let output = "var foo: [String: Int]"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testSwiftDictionaryTypeConvertedToSugar() {
-        let input = "var foo: Swift.Dictionary<String, Int>"
-        let output = "var foo: [String: Int]"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testOptionalTypeConvertedToSugar() {
-        let input = "var foo: Optional<String>"
-        let output = "var foo: String?"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testSwiftOptionalTypeConvertedToSugar() {
-        let input = "var foo: Swift.Optional<String>"
-        let output = "var foo: String?"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testOptionalClosureParenthesizedConvertedToSugar() {
-        let input = "var foo: Optional<(Int) -> String>"
-        let output = "var foo: ((Int) -> String)?"
-        testFormatting(for: input, output, rule: FormatRules.typeSugar)
-    }
-
-    func testSwiftOptionalClosureParenthesizedConvertedToSugar() {
-        let input = "var foo: Swift.Optional<(Int) -> String>"
-        let output = "var foo: ((Int) -> String)?"
         testFormatting(for: input, output, rule: FormatRules.typeSugar)
     }
 
@@ -10099,6 +10649,46 @@ class RulesTests: XCTestCase {
         testFormatting(for: input, output, rule: FormatRules.typeSugar)
     }
 
+    // dictionaries
+
+    func testDictionaryTypeConvertedToSugar() {
+        let input = "var foo: Dictionary<String, Int>"
+        let output = "var foo: [String: Int]"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testSwiftDictionaryTypeConvertedToSugar() {
+        let input = "var foo: Swift.Dictionary<String, Int>"
+        let output = "var foo: [String: Int]"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    // optionals
+
+    func testOptionalTypeConvertedToSugar() {
+        let input = "var foo: Optional<String>"
+        let output = "var foo: String?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testSwiftOptionalTypeConvertedToSugar() {
+        let input = "var foo: Swift.Optional<String>"
+        let output = "var foo: String?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testOptionalClosureParenthesizedConvertedToSugar() {
+        let input = "var foo: Optional<(Int) -> String>"
+        let output = "var foo: ((Int) -> String)?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testSwiftOptionalClosureParenthesizedConvertedToSugar() {
+        let input = "var foo: Swift.Optional<(Int) -> String>"
+        let output = "var foo: ((Int) -> String)?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
     func testStrippingSwiftNamespaceInOptionalTypeWhenConvertedToSugar() {
         let input = "Swift.Optional<String>"
         let output = "String?"
@@ -10108,6 +10698,67 @@ class RulesTests: XCTestCase {
     func testStrippingSwiftNamespaceDoesNotStripPreviousSwiftNamespaceReferences() {
         let input = "let a: Swift.String = Optional<String>"
         let output = "let a: Swift.String = String?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    // shortOptionals = exceptProperties
+
+    func testPropertyTypeNotConvertedToSugar() {
+        let input = "var foo: Optional<String>"
+        let options = FormatOptions(shortOptionals: .exceptProperties)
+        testFormatting(for: input, rule: FormatRules.typeSugar, options: options)
+    }
+
+    // swift parser bug
+
+    func testAvoidSwiftParserBugWithClosuresInsideArrays() {
+        let input = "var foo = Array<(_ image: Data?) -> Void>()"
+        testFormatting(for: input, rule: FormatRules.typeSugar)
+    }
+
+    func testAvoidSwiftParserBugWithClosuresInsideDictionaries() {
+        let input = "var foo = Dictionary<String, (_ image: Data?) -> Void>()"
+        testFormatting(for: input, rule: FormatRules.typeSugar)
+    }
+
+    func testAvoidSwiftParserBugWithClosuresInsideOptionals() {
+        let input = "var foo = Optional<(_ image: Data?) -> Void>()"
+        testFormatting(for: input, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround() {
+        let input = "var foo: Array<(_ image: Data?) -> Void>"
+        let output = "var foo: [(_ image: Data?) -> Void]"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround2() {
+        let input = "var foo: Dictionary<String, (_ image: Data?) -> Void>"
+        let output = "var foo: [String: (_ image: Data?) -> Void]"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround3() {
+        let input = "var foo: Optional<(_ image: Data?) -> Void>"
+        let output = "var foo: ((_ image: Data?) -> Void)?"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround4() {
+        let input = "var foo = Array<(image: Data?) -> Void>()"
+        let output = "var foo = [(image: Data?) -> Void]()"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround5() {
+        let input = "var foo = Array<(Data?) -> Void>()"
+        let output = "var foo = [(Data?) -> Void]()"
+        testFormatting(for: input, output, rule: FormatRules.typeSugar)
+    }
+
+    func testDontOverApplyBugWorkaround6() {
+        let input = "var foo = Dictionary<Int, Array<(_ image: Data?) -> Void>>()"
+        let output = "var foo = [Int: Array<(_ image: Data?) -> Void>]()"
         testFormatting(for: input, output, rule: FormatRules.typeSugar)
     }
 
@@ -10513,7 +11164,7 @@ class RulesTests: XCTestCase {
         }
 
         class Bar: Foo, Equatable {
-            public override init() {
+            override public init() {
                 super.init()
             }
         }
@@ -10529,7 +11180,7 @@ class RulesTests: XCTestCase {
         }
 
         class Bar: Baz {
-            public override init() {
+            override public init() {
                 super.init()
             }
         }
@@ -10540,7 +11191,7 @@ class RulesTests: XCTestCase {
         }
 
         class Bar: Baz {
-            public override init() {
+            override public init() {
                 super.init()
             }
         }

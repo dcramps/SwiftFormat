@@ -2,7 +2,7 @@
 //  Tokenizer.swift
 //  SwiftFormat
 //
-//  Version 0.44.4
+//  Version 0.44.13
 //
 //  Created by Nick Lockwood on 11/08/2016.
 //  Copyright 2016 Nick Lockwood
@@ -405,6 +405,15 @@ public enum Token: Equatable {
         }
     }
 
+    public var isStringBody: Bool {
+        switch self {
+        case .stringBody:
+            return true
+        default:
+            return false
+        }
+    }
+
     public var isStringDelimiter: Bool {
         switch self {
         case let .startOfScope(string), let .endOfScope(string):
@@ -478,8 +487,7 @@ public enum Token: Equatable {
             default:
                 return false
             }
-        case .delimiter(":"):
-            // Special case, only used in tokenizer
+        case .delimiter(":"), .startOfScope(":"):
             switch token {
             case .endOfScope("case"), .endOfScope("default"), .operator("?", .infix):
                 return true
@@ -1112,28 +1120,39 @@ public func tokenize(_ source: String) -> [Token] {
                 if !string.isEmpty {
                     tokens.append(.error(string)) // Not permitted by the spec
                 }
-                var offset = ""
-                if case let .space(_offset) = tokens.last! {
-                    offset = _offset
+                var offsetStack = [""]
+                if case let .space(offset) = tokens.last! {
+                    offsetStack[0] = offset
                 }
                 // Fix up indents
                 for index in (scopeIndexStack.last! ..< tokens.count - 1).reversed() {
-                    if case let .space(indent) = tokens[index], tokens[index - 1].isLinebreak {
-                        guard offset.isEmpty || indent.hasPrefix(offset) else {
-                            tokens[index] = .error(indent) // Mismatched whitespace
-                            break
+                    let nextToken = tokens[index + 1]
+                    guard case let .space(indent) = tokens[index], tokens[index - 1].isLinebreak,
+                        (nextToken.isMultilineStringDelimiter && nextToken.isEndOfScope) ||
+                        nextToken.isStringBody else {
+                        if nextToken.isMultilineStringDelimiter, nextToken.isStartOfScope {
+                            offsetStack.removeLast()
                         }
-                        let remainder: String = String(indent[offset.endIndex ..< indent.endIndex])
-                        if case let .stringBody(body) = tokens[index + 1] {
-                            tokens[index + 1] = .stringBody(remainder + body)
-                        } else {
-                            tokens.insert(.stringBody(remainder), at: index + 1)
-                        }
-                        if offset.isEmpty {
-                            tokens.remove(at: index)
-                        } else {
-                            tokens[index] = .space(offset)
-                        }
+                        continue
+                    }
+                    if nextToken.isMultilineStringDelimiter, nextToken.isEndOfScope {
+                        offsetStack.append(indent)
+                    }
+                    let offset = offsetStack.last ?? ""
+                    guard offset.isEmpty || indent.hasPrefix(offset) else {
+                        tokens[index] = .error(indent) // Mismatched whitespace
+                        break
+                    }
+                    let remainder: String = String(indent[offset.endIndex ..< indent.endIndex])
+                    if case let .stringBody(body) = nextToken {
+                        tokens[index + 1] = .stringBody(remainder + body)
+                    } else if !remainder.isEmpty {
+                        tokens.insert(.stringBody(remainder), at: index + 1)
+                    }
+                    if offset.isEmpty {
+                        tokens.remove(at: index)
+                    } else {
+                        tokens[index] = .space(offset)
                     }
                 }
                 tokens.append(.endOfScope("\"\"\"" + hashes))
@@ -1215,28 +1234,47 @@ public func tokenize(_ source: String) -> [Token] {
                 continue
             case "*" where characters.read("/"):
                 flushCommentBodyTokens()
+                tokens.append(.endOfScope("*/"))
                 // Fix up indents
                 var baseIndent = ""
-                for index in scopeIndexStack.last! ..< tokens.count - 1 {
-                    if case let .space(indent) = tokens[index], tokens[index - 1].isLinebreak,
-                        tokens.count > index, case .commentBody = tokens[index + 1],
-                        baseIndent.isEmpty || indent.count < baseIndent.count {
-                        baseIndent = indent
-                    }
-                }
-                for index in (scopeIndexStack.last! ..< tokens.count - 1).reversed() {
-                    if case let .space(indent) = tokens[index], tokens[index - 1].isLinebreak,
-                        tokens.count > index, case let .commentBody(body) = tokens[index + 1],
-                        indent.hasPrefix(baseIndent) {
-                        tokens[index + 1] = .commentBody(indent.dropFirst(baseIndent.count) + body)
-                        if baseIndent.isEmpty {
-                            tokens.remove(at: index)
-                        } else {
-                            tokens[index] = .space(baseIndent)
+                let range = scopeIndexStack.last! + 1 ..< tokens.count - 1
+                for index in range where tokens[index - 1].isLinebreak {
+                    if case let .space(indent) = tokens[index] {
+                        switch tokens[index + 1] {
+                        case .commentBody, .endOfScope("*/"):
+                            if baseIndent.isEmpty || indent.count < baseIndent.count {
+                                baseIndent = indent
+                            }
+                        default:
+                            break
                         }
+                    } else if case .commentBody = tokens[index] {
+                        baseIndent = ""
+                        break
                     }
                 }
-                tokens.append(.endOfScope("*/"))
+                for index in range.reversed() {
+                    guard case let .space(indent) = tokens[index], tokens[index - 1].isLinebreak,
+                        indent.hasPrefix(baseIndent) else {
+                        continue
+                    }
+                    switch tokens[index + 1] {
+                    case let .commentBody(body):
+                        tokens[index + 1] = .commentBody(indent.dropFirst(baseIndent.count) + body)
+                    case .startOfScope("/*"), .endOfScope("*/"):
+                        if indent.count > baseIndent.count {
+                            tokens.insert(.commentBody(String(indent.dropFirst(baseIndent.count))),
+                                          at: index + 1)
+                        }
+                    default:
+                        continue
+                    }
+                    if baseIndent.isEmpty {
+                        tokens.remove(at: index)
+                    } else {
+                        tokens[index] = .space(baseIndent)
+                    }
+                }
                 scopeIndexStack.removeLast()
                 if scopeIndexStack.last == nil || tokens[scopeIndexStack.last!] != .startOfScope("/*") {
                     return
