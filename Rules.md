@@ -578,7 +578,7 @@ Option | Description
 
 ## multiLineBraces
 
-Place `{` on a new line if the guard statement has multiple lines.
+Insert a linebreak before the opening brace of a mutli-line init, func, if, or guard.
 
 ## numberFormatting
 
