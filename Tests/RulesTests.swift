@@ -1666,7 +1666,7 @@ class RulesTests: XCTestCase {
     func testIndentIfCaseCommaCase() {
         let input = "{\nif case let .foo(msg) = a,\ncase let .bar(msg) = b {}\n}"
         let output = "{\n    if case let .foo(msg) = a,\n        case let .bar(msg) = b {}\n}"
-        RulesShared.testFormatting(for: input, output, rule: FormatRules.indent)
+        RulesShared.testFormatting(for: input, output, rule: FormatRules.indent, exclude: ["multiLineBraces"])
         let options = FormatOptions(xcodeIndentation: true)
         XCTAssertEqual(try format(input, rules: [FormatRules.indent]),
                        try format(input, rules: [FormatRules.indent], options: options))
@@ -2008,7 +2008,7 @@ class RulesTests: XCTestCase {
                 let bar = bar else { break }
         }
         """
-        RulesShared.testFormatting(for: input, rule: FormatRules.indent)
+        RulesShared.testFormatting(for: input, rule: FormatRules.indent, exclude: ["multiLineBraces"])
     }
 
     func testConsecutiveWraps() {
@@ -2177,7 +2177,7 @@ class RulesTests: XCTestCase {
     func testIndentInsideWrappedIfStatementWithClosureCondition() {
         let input = "if foo({ 1 }) ||\nbar {\nbaz()\n}"
         let output = "if foo({ 1 }) ||\n    bar {\n    baz()\n}"
-        RulesShared.testFormatting(for: input, output, rule: FormatRules.indent)
+        RulesShared.testFormatting(for: input, output, rule: FormatRules.indent, exclude: ["multiLineBraces"])
     }
 
     func testIndentInsideWrappedClassDefinition() {
@@ -4944,7 +4944,7 @@ class RulesTests: XCTestCase {
 
     func testClosureArgumentAfterLinebreakInGuardNotMadeTrailing() {
         let input = "guard let foo =\n    bar({ /* some code */ })\nelse { return }"
-        RulesShared.testFormatting(for: input, rule: FormatRules.trailingClosures)
+        RulesShared.testFormatting(for: input, rule: FormatRules.trailingClosures, exclude: ["multiLineBraces"])
     }
 
     func testClosureMadeTrailingForNumericTupleMember() {
@@ -7410,7 +7410,7 @@ class RulesTests: XCTestCase {
 
     func testNoMarkUnusedArgumentsInProtocolFunction() {
         let input = "protocol Foo {\n    func foo(bar: Int) -> Int\n    var bar: Int { get }\n}"
-        RulesShared.testFormatting(for: input, rule: FormatRules.unusedArguments)
+        RulesShared.testFormatting(for: input, rule: FormatRules.unusedArguments, exclude: ["multiLineBraces"])
     }
 
     func testUnusedUnnamedFunctionArgument() {
@@ -7810,7 +7810,7 @@ class RulesTests: XCTestCase {
             bar {}
         """
         let options = FormatOptions(maxWidth: 20)
-        RulesShared.testFormatting(for: input, [output, output2], rules: [FormatRules.wrap], options: options)
+        RulesShared.testFormatting(for: input, [output, output2], rules: [FormatRules.wrap], options: options, exclude: ["multiLineBraces"])
     }
 
     func testWrapGuardStatement() {
@@ -7946,7 +7946,7 @@ class RulesTests: XCTestCase {
         }
         """
         let options = FormatOptions(maxWidth: 35)
-        RulesShared.testFormatting(for: input, output, rule: FormatRules.wrap, options: options)
+        RulesShared.testFormatting(for: input, output, rule: FormatRules.wrap, options: options, exclude: ["multiLineBraces"])
     }
 
     func testWrapFunctionIfReturnTypeExceedsMaxWidth2WithXcodeIndentation() {
@@ -7968,7 +7968,7 @@ class RulesTests: XCTestCase {
         }
         """
         let options = FormatOptions(xcodeIndentation: true, maxWidth: 35)
-        RulesShared.testFormatting(for: input, [output, output2], rules: [FormatRules.wrap], options: options)
+        RulesShared.testFormatting(for: input, [output, output2], rules: [FormatRules.wrap], options: options, exclude: ["multiLineBraces"])
     }
 
     func testWrapFunctionIfReturnTypeExceedsMaxWidth3() {
@@ -8623,7 +8623,7 @@ class RulesTests: XCTestCase {
         RulesShared.testFormatting(for: input, [output],
                                    rules: [FormatRules.wrapArguments],
                                    options: options,
-                                   exclude: ["unusedArguments"])
+                                   exclude: ["unusedArguments", "multiLineBraces"])
     }
 
     func testWrapParametersListBeforeFirstInClosureTypeAsFunctionParameterWithOtherParamsAfterWrappedClosure() {
@@ -8642,7 +8642,7 @@ class RulesTests: XCTestCase {
         RulesShared.testFormatting(for: input, [output],
                                    rules: [FormatRules.wrapArguments],
                                    options: options,
-                                   exclude: ["unusedArguments"])
+                                   exclude: ["unusedArguments", "multiLineBraces"])
     }
 
     func testWrapParametersListBeforeFirstInEscapingClosureTypeAsFunctionParameter() {

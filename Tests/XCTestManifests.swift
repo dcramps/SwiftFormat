@@ -291,6 +291,7 @@ extension MultiLineAllmanTests {
         ("testIfLet", testIfLet),
         ("testInit", testInit),
         ("testInlineClosure", testInlineClosure),
+        ("testInlineClosureWithMultipleLines", testInlineClosureWithMultipleLines),
         ("testProperIndentation", testProperIndentation),
     ]
 }

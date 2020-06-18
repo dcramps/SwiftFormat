@@ -233,4 +233,21 @@ class MultiLineAllmanTests: XCTestCase {
             exclude: ["braces"]
         )
     }
+
+    func testInlineClosureWithMultipleLines() {
+        let input = """
+        guard nil != [1, 2, 3].first(where: { int -> Bool in
+            int > 1
+        }) else {
+            return
+        }
+        """
+
+        RulesShared.testFormatting(
+            for: input,
+            rule: FormatRules.multiLineBraces,
+            options: FormatOptions(closingParenOnSameLine: true),
+            exclude: ["braces"]
+        )
+    }
 }

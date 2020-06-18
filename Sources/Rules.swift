@@ -1420,23 +1420,42 @@ public struct _FormatRules {
         ]
         keywords.forEach {
             formatter.forEach($0) { i, _ in
-                guard let nextStartOfScope = formatter.nextToken(after: i, where: {
-                    $0 == .startOfScope("{") && !formatter.isStartOfClosure(at: formatter.tokens.index(of: $0)!)
-                }) else {
+                guard var startOfScopeToken = formatter.nextToken(after: i, where: { $0 == .startOfScope("{") }),
+                    var startOfScopeIndex = formatter.index(of: startOfScopeToken, after: i) else {
                     return
                 }
 
-                guard let nextStartOfScopeIndex = formatter.index(of: nextStartOfScope, after: i),
-                    let upperBound = formatter.last(.nonSpace, before: nextStartOfScopeIndex),
-                    let upperBoundIndex = formatter.tokens.index(of: upperBound),
-                    i < upperBoundIndex else {
+                while formatter.isStartOfClosure(at: startOfScopeIndex) {
+                    if let possibleToken = formatter.nextToken(after: startOfScopeIndex, where: { $0 == .startOfScope("{") }),
+                        let possibleIndex = formatter.index(of: possibleToken, after: startOfScopeIndex) {
+                        startOfScopeToken = possibleToken
+                        startOfScopeIndex = possibleIndex
+                    } else {
+                        return
+                    }
+                }
+
+                guard let upperBoundIndex = formatter.lastIndex(of: .nonSpace, in: i ..< startOfScopeIndex) else {
                     return
                 }
 
                 let keywordRange = i ... upperBoundIndex
                 let keywordSlice = formatter.tokens[keywordRange]
 
-                let linebreaksInStatement = formatter.tokens[keywordRange].filter { $0.isLinebreak }
+                let linebreaksInStatement = formatter.tokens[keywordRange].filter {
+                    guard let index = formatter.tokens.index(of: $0) else {
+                        return false
+                    }
+                    if $0.isLinebreak {
+                        // linebreaks within closures are ignored
+                        if let lastStartOfScopeIndex = formatter.lastIndex(of: .startOfScope("{"), in: keywordRange.lowerBound ..< index) {
+                            return !formatter.isStartOfClosure(at: lastStartOfScopeIndex)
+                        }
+                        return true
+                    }
+                    return false
+                }
+
                 if !linebreaksInStatement.isEmpty {
                     if formatter.tokens[upperBoundIndex].is(.linebreak) {
                         return
