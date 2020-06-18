@@ -8,8 +8,8 @@
 
 import Foundation
 
-@testable import SwiftFormat
 import XCTest
+@testable import SwiftFormat
 
 class MultiLineAllmanTests: XCTestCase {
     func testInit() {
@@ -139,6 +139,89 @@ class MultiLineAllmanTests: XCTestCase {
             let b = c else
         {
             print("true")
+        }
+        """
+
+        RulesShared.testFormatting(
+            for: input,
+            output,
+            rule: FormatRules.multiLineBraces,
+            options: FormatOptions(closingParenOnSameLine: true),
+            exclude: ["braces"]
+        )
+    }
+
+    func testIfDuplicateTokenReferences() {
+        let input = """
+        if formatter.options.fragment,
+            let firstIndex = formatter.index(of: .nonSpaceOrLinebreak, after: -1),
+            let indentToken = formatter.token(at: firstIndex - 1), case let .space(string) = indentToken {
+            indentStack[0] = string
+        }
+        """
+
+        let output = """
+        if formatter.options.fragment,
+            let firstIndex = formatter.index(of: .nonSpaceOrLinebreak, after: -1),
+            let indentToken = formatter.token(at: firstIndex - 1), case let .space(string) = indentToken
+        {
+            indentStack[0] = string
+        }
+        """
+
+        RulesShared.testFormatting(
+            for: input,
+            output,
+            rule: FormatRules.multiLineBraces,
+            options: FormatOptions(closingParenOnSameLine: true),
+            exclude: ["braces"]
+        )
+    }
+
+    func testProperIndentation() {
+        let input = """
+        class TestClass {
+            init(
+                a: Int,
+                b: Int) {
+                print(a); print(b)
+            }
+        }
+        """
+
+        let output = """
+        class TestClass {
+            init(
+                a: Int,
+                b: Int)
+            {
+                print(a); print(b)
+            }
+        }
+        """
+
+        RulesShared.testFormatting(
+            for: input,
+            output,
+            rule: FormatRules.multiLineBraces,
+            options: FormatOptions(closingParenOnSameLine: true),
+            exclude: ["braces"]
+        )
+    }
+
+    func testInlineClosure() {
+        let input = """
+        if let a = b.first(where: { $0.something }),
+            let c = a.count {
+            print(c)
+        }
+        """
+
+        let output = """
+        if let a = b.first(where: { $0.something }),
+            let c = a.count
+        {
+            print(c)
         }
         """
 

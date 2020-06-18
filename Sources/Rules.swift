@@ -1444,6 +1444,8 @@ public struct _FormatRules {
                     if let nextSpace = formatter.index(of: .space, after: upperBoundIndex) {
                         formatter.removeToken(at: nextSpace)
                     }
+                    let indent = formatter.indentForLine(at: i)
+                    formatter.insertSpace(indent, at: upperBoundIndex + 1)
                     formatter.insertLinebreak(at: upperBoundIndex + 1)
                 }
             }

@@ -287,8 +287,11 @@ extension MultiLineAllmanTests {
         ("testFunc", testFunc),
         ("testGuard", testGuard),
         ("testIf", testIf),
+        ("testIfDuplicateTokenReferences", testIfDuplicateTokenReferences),
         ("testIfLet", testIfLet),
         ("testInit", testInit),
+        ("testInlineClosure", testInlineClosure),
+        ("testProperIndentation", testProperIndentation),
     ]
 }
 
