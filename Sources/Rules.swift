@@ -1473,6 +1473,19 @@ public struct _FormatRules {
                 }
             }
         }
+
+        // now go back and correct all the { get } or { get set } that are on their own line
+        formatter.forEach(.startOfScope("{")) { i, _ in
+            guard i != 0 else { return }
+            if formatter.startOfLine(at: i) == i - 1,
+                let closingBrace = formatter.nextToken(after: i, where: { $0 == .endOfScope("}") }),
+                let closingBraceIndex = formatter.index(of: closingBrace, after: i),
+                formatter.tokens[i ... closingBraceIndex].contains(.identifier("get")),
+                formatter.nextToken(after: closingBraceIndex)?.isLinebreak ?? false,
+                let prevIndex = formatter.index(of: .nonSpaceOrLinebreak, before: i) {
+                formatter.replaceTokens(inRange: prevIndex + 1 ..< i, with: [.space(" ")])
+            }
+        }
     }
 
     /// Ensure that an `else` statement following `if { ... }` appears on the same line

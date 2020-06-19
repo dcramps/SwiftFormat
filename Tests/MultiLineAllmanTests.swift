@@ -250,4 +250,26 @@ class MultiLineAllmanTests: XCTestCase {
             exclude: ["braces"]
         )
     }
+
+    func testProtocolGet() {
+        let input = """
+        protocol Protocol {
+            func a()
+            var b: C { get }
+        }
+        """
+
+        XCTAssertEqual(try format(input, rules: [FormatRules.multiLineBraces], options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true)), input)
+    }
+
+    func testProtocolGetSet() {
+        let input = """
+        protocol Protocol {
+            func a()
+            var b: C { get set }
+        }
+        """
+
+        XCTAssertEqual(try format(input, rules: [FormatRules.multiLineBraces], options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true)), input)
+    }
 }

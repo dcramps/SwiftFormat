@@ -293,6 +293,8 @@ extension MultiLineAllmanTests {
         ("testInlineClosure", testInlineClosure),
         ("testInlineClosureWithMultipleLines", testInlineClosureWithMultipleLines),
         ("testProperIndentation", testProperIndentation),
+        ("testProtocolGet", testProtocolGet),
+        ("testProtocolGetSet", testProtocolGetSet),
     ]
 }
 
