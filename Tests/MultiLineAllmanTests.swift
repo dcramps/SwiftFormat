@@ -36,7 +36,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -65,7 +65,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -92,7 +92,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -119,7 +119,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -146,7 +146,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -173,7 +173,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -204,7 +204,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -229,7 +229,7 @@ class MultiLineAllmanTests: XCTestCase {
             for: input,
             output,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }
@@ -246,7 +246,7 @@ class MultiLineAllmanTests: XCTestCase {
         RulesShared.testFormatting(
             for: input,
             rule: FormatRules.multiLineBraces,
-            options: FormatOptions(closingParenOnSameLine: true),
+            options: FormatOptions(multiLineBraces: true, closingParenOnSameLine: true),
             exclude: ["braces"]
         )
     }

@@ -255,6 +255,7 @@ extension FormatOptions.Descriptor {
         trailingCommas,
         truncateBlankLines,
         allmanBraces,
+        multiLineBraces,
         fileHeader,
         ifdefIndent,
         wrapArguments,
@@ -399,6 +400,15 @@ extension FormatOptions.Descriptor {
         displayName: "Allman Braces",
         help: "Use allman indentation style: \"true\" or \"false\" (default)",
         keyPath: \.allmanBraces,
+        trueValues: ["true", "enabled"],
+        falseValues: ["false", "disabled"]
+    )
+    static let multiLineBraces = FormatOptions.Descriptor(
+        argumentName: "multiLineBraces",
+        propertyName: "multiLineBraces",
+        displayName: "Multi line statement braces",
+        help: "Insert a linebreak before the opening brace of a mutli-line init, func, if, or guard.",
+        keyPath: \.multiLineBraces,
         trueValues: ["true", "enabled"],
         falseValues: ["false", "disabled"]
     )

@@ -580,6 +580,10 @@ Option | Description
 
 Insert a linebreak before the opening brace of a mutli-line init, func, if, or guard.
 
+Option | Description
+--- | ---
+`--multiLineBraces` | Insert a linebreak before the opening brace of a mutli-line init, func, if, or guard.
+
 ## numberFormatting
 
 Use consistent grouping for numeric literals.
