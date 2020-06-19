@@ -1409,9 +1409,13 @@ public struct _FormatRules {
     public let multiLineBraces = FormatRule(
         help: "Insert a linebreak before the opening brace of a mutli-line init, func, if, or guard.",
         orderAfter: ["braces"],
-        options: [],
+        options: ["multiLineBraces"],
         sharedOptions: ["linebreaks"]
     ) { formatter in
+        guard formatter.options.multiLineBraces else {
+            return
+        }
+
         let keywords: [Token] = [
             .keyword("init"),
             .keyword("func"),
