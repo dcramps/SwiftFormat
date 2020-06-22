@@ -6,8 +6,8 @@
 //  Copyright © 2018 Nick Lockwood. All rights reserved.
 //
 
-import XCTest
 @testable import SwiftFormat
+import XCTest
 
 class GlobsTests: XCTestCase {
     // MARK: glob matching
@@ -85,14 +85,14 @@ class GlobsTests: XCTestCase {
     func testExpandPathWithWildcardAtStart() {
         let path = "*Tests.swift"
         let directory = URL(fileURLWithPath: #file).deletingLastPathComponent()
-        XCTAssertEqual(matchGlobs(expandGlobs(path, in: directory.path), in: directory.path).count, 13)
+        XCTAssertEqual(matchGlobs(expandGlobs(path, in: directory.path), in: directory.path).count, 14)
     }
 
     func testExpandPathWithSubdirectoryAndWildcard() {
         let path = "Tests/*Tests.swift"
         let directory = URL(fileURLWithPath: #file)
             .deletingLastPathComponent().deletingLastPathComponent()
-        XCTAssertEqual(matchGlobs(expandGlobs(path, in: directory.path), in: directory.path).count, 13)
+        XCTAssertEqual(matchGlobs(expandGlobs(path, in: directory.path), in: directory.path).count, 14)
     }
 
     func testSingleWildcardDoesNotMatchDirectorySlash() {

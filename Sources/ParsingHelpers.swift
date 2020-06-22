@@ -321,6 +321,8 @@ extension Formatter {
                 }
             case .operator("->", .infix), .keyword("init"), .keyword("subscript"):
                 return false
+            case .endOfScope(">"):
+                return false
             default:
                 return !isConditionalStatement(at: startOfScope)
             }
